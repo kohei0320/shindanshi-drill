@@ -1,0 +1,684 @@
+{
+  "questions": [
+    {
+      "id": "eco-01",
+      "year": 2024,
+      "subject": "economics",
+      "category": "GDP",
+      "difficulty": 1,
+      "question": "GDP（国内総生産）の説明として、最も適切なものはどれか。",
+      "choices": [
+        "国内で一定期間に生産された付加価値の合計である",
+        "国民が海外で得た所得のみを合計したものである",
+        "企業の負債合計を表す指標である",
+        "株価の平均値を表す指標である"
+      ],
+      "answer": 0,
+      "explanation": "GDPは、国内で一定期間に生み出された付加価値の合計です。居住者の海外所得はGNI側の概念です。"
+    },
+    {
+      "id": "eco-02",
+      "year": 2023,
+      "subject": "economics",
+      "category": "物価",
+      "difficulty": 1,
+      "question": "インフレーションの説明として、最も適切なものはどれか。",
+      "choices": [
+        "物価水準が継続的に下落すること",
+        "物価水準が継続的に上昇すること",
+        "失業率だけが上昇すること",
+        "名目金利が必ずゼロになること"
+      ],
+      "answer": 1,
+      "explanation": "インフレーションは物価水準の継続的な上昇を指します。継続的な下落はデフレーションです。"
+    },
+    {
+      "id": "eco-03",
+      "year": 2024,
+      "subject": "economics",
+      "category": "需要",
+      "difficulty": 2,
+      "question": "需要の価格弾力性が1より大きい財について、最も適切なものはどれか。",
+      "choices": [
+        "価格が下がると総収入は減少する",
+        "価格が下がると総収入は増加する",
+        "需要量は価格に反応しない",
+        "必ずギッフェン財である"
+      ],
+      "answer": 1,
+      "explanation": "弾力的需要（弾力性>1）では、値下げによる数量増が効いて総収入は増えます。"
+    },
+    {
+      "id": "eco-04",
+      "year": 2025,
+      "subject": "economics",
+      "category": "乗数効果",
+      "difficulty": 2,
+      "question": "限界消費性向が 0.75 のとき、政府支出乗数はいくらか。",
+      "choices": ["0.75", "1.33", "4", "7.5"],
+      "answer": 2,
+      "explanation": "政府支出乗数は 1/(1−限界消費性向)=1/0.25=4 です。"
+    },
+    {
+      "id": "eco-05",
+      "year": 2022,
+      "subject": "economics",
+      "category": "為替",
+      "difficulty": 2,
+      "question": "自国通貨高（円高）が進むとき、一般に起こりやすいのはどれか。",
+      "choices": [
+        "輸出数量が増加しやすい",
+        "輸入品の国内価格が下落しやすい",
+        "貿易財の国内生産が必ず拡大する",
+        "対外資産の円建て価値が必ず増加する"
+      ],
+      "answer": 1,
+      "explanation": "円高では輸入品が相対的に安くなりやすく、輸出は不利になりやすいです。"
+    },
+    {
+      "id": "eco-06",
+      "year": 2023,
+      "subject": "economics",
+      "category": "完全競争",
+      "difficulty": 2,
+      "question": "完全競争市場の前提として、最も適切なものはどれか。",
+      "choices": [
+        "企業が価格支配力を持つ",
+        "参入障壁が非常に高い",
+        "多数の売り手と買い手が価格受容者である",
+        "製品差別化が顕著である"
+      ],
+      "answer": 2,
+      "explanation": "完全競争では多数の経済主体が価格受容者となり、参入退出が容易で、製品は同質と仮定されます。"
+    },
+    {
+      "id": "eco-07",
+      "year": 2024,
+      "subject": "economics",
+      "category": "失業",
+      "difficulty": 1,
+      "question": "景気後退で労働需要が減り発生する失業はどれか。",
+      "choices": ["摩擦的失業", "構造的失業", "循環的失業", "自発的失業のみ"],
+      "answer": 2,
+      "explanation": "景気循環に伴う失業は循環的失業（需要不足失業）です。"
+    },
+    {
+      "id": "eco-08",
+      "year": 2025,
+      "subject": "economics",
+      "category": "IS-LM",
+      "difficulty": 3,
+      "question": "IS-LM分析で、政府支出を増やしたとき、他の条件を一定とすれば最も適切なものはどれか。",
+      "choices": [
+        "IS曲線が左方にシフトする",
+        "IS曲線が右方にシフトする",
+        "LM曲線だけが必ず左方にシフトする",
+        "利子率は必ず低下する"
+      ],
+      "answer": 1,
+      "explanation": "拡張財政は財市場を刺激し、IS曲線を右方へシフトさせます。利子率は上昇しやすいです。"
+    },
+    {
+      "id": "fin-01",
+      "year": 2024,
+      "subject": "finance",
+      "category": "財務諸表",
+      "difficulty": 1,
+      "question": "貸借対照表（B/S）に表示されるものはどれか。",
+      "choices": [
+        "売上高",
+        "当期純利益のみ",
+        "資産・負債・純資産",
+        "営業キャッシュ・フローのみ"
+      ],
+      "answer": 2,
+      "explanation": "貸借対照表は期末時点の資産・負債・純資産を示します。"
+    },
+    {
+      "id": "fin-02",
+      "year": 2023,
+      "subject": "finance",
+      "category": "損益計算書",
+      "difficulty": 1,
+      "question": "損益計算書で、売上高から売上原価を差し引いた利益はどれか。",
+      "choices": ["営業利益", "経常利益", "売上総利益", "当期純利益"],
+      "answer": 2,
+      "explanation": "売上高−売上原価＝売上総利益（粗利）です。"
+    },
+    {
+      "id": "fin-03",
+      "year": 2024,
+      "subject": "finance",
+      "category": "キャッシュフロー",
+      "difficulty": 2,
+      "question": "営業活動によるキャッシュ・フローに含まれるものとして、最も適切なものはどれか。",
+      "choices": [
+        "設備の購入支出",
+        "借入金の返済",
+        "売上債権の回収",
+        "増資による入金"
+      ],
+      "answer": 2,
+      "explanation": "売上債権の回収は営業CFです。設備購入は投資CF、借入返済や増資は財務CFです。"
+    },
+    {
+      "id": "fin-04",
+      "year": 2022,
+      "subject": "finance",
+      "category": "原価計算",
+      "difficulty": 2,
+      "question": "直接材料費のように、製品との対応が明確な原価はどれか。",
+      "choices": ["間接費", "固定費", "直接費", "期間費用"],
+      "answer": 2,
+      "explanation": "製品に直接跡付けできる原価が直接費です。"
+    },
+    {
+      "id": "fin-05",
+      "year": 2025,
+      "subject": "finance",
+      "category": "投資評価",
+      "difficulty": 2,
+      "question": "正味現在価値（NPV）が正の投資案について、最も適切なものはどれか。",
+      "choices": [
+        "資本コストを下回るため棄却すべきである",
+        "現在価値ベースで価値を増やすため採択候補となる",
+        "回収期間法では必ず棄却される",
+        "会計上の利益は必ず負になる"
+      ],
+      "answer": 1,
+      "explanation": "NPV>0 は、割引後のキャッシュフローが投資額を上回り、企業価値を増やす案です。"
+    },
+    {
+      "id": "fin-06",
+      "year": 2023,
+      "subject": "finance",
+      "category": "安全性",
+      "difficulty": 1,
+      "question": "自己資本比率の説明として、最も適切なものはどれか。",
+      "choices": [
+        "総資産に占める自己資本の割合である",
+        "売上高に占める営業利益の割合である",
+        "流動負債に占める現金の割合である",
+        "配当性向と同じ指標である"
+      ],
+      "answer": 0,
+      "explanation": "自己資本比率＝自己資本÷総資産で、財務安全性の指標です。"
+    },
+    {
+      "id": "fin-07",
+      "year": 2024,
+      "subject": "finance",
+      "category": "収益性",
+      "difficulty": 2,
+      "question": "ROE（自己資本利益率）の基本式として、最も適切なものはどれか。",
+      "choices": [
+        "売上高÷総資産",
+        "当期純利益÷自己資本",
+        "営業利益÷売上高",
+        "負債÷自己資本"
+      ],
+      "answer": 1,
+      "explanation": "ROEは株主の持分に対する最終利益の割合で、当期純利益÷自己資本です。"
+    },
+    {
+      "id": "mgt-01",
+      "year": 2023,
+      "subject": "management",
+      "category": "モチベーション",
+      "difficulty": 1,
+      "question": "マズローの欲求階層説で、最下層に位置するのはどれか。",
+      "choices": ["自己実現欲求", "承認欲求", "社会的欲求", "生理的欲求"],
+      "answer": 3,
+      "explanation": "最下層は生理的欲求です。"
+    },
+    {
+      "id": "mgt-02",
+      "year": 2024,
+      "subject": "management",
+      "category": "戦略",
+      "difficulty": 1,
+      "question": "SWOT分析のOは何を指すか。",
+      "choices": ["組織", "機会", "目標", "強み"],
+      "answer": 1,
+      "explanation": "Oは Opportunity（機会）です。S強み、W弱み、T脅威と組み合わせます。"
+    },
+    {
+      "id": "mgt-03",
+      "year": 2022,
+      "subject": "management",
+      "category": "PPM",
+      "difficulty": 2,
+      "question": "PPMで、市場成長率は高いが相対シェアが低い事業はどれか。",
+      "choices": ["金のなる木", "花形", "負け犬", "問題児"],
+      "answer": 3,
+      "explanation": "高成長・低シェアは問題児（クエスチョンマーク）です。"
+    },
+    {
+      "id": "mgt-04",
+      "year": 2025,
+      "subject": "management",
+      "category": "リーダーシップ",
+      "difficulty": 2,
+      "question": "状況に応じて指示と支援の度合いを変える考え方に近いのはどれか。",
+      "choices": [
+        "特性理論のみ",
+        "条件適合理論（コンティンジェンシー）",
+        "科学的管理法",
+        "官僚制の逆機能"
+      ],
+      "answer": 1,
+      "explanation": "リーダーシップの条件適合理論は、状況に応じて有効な行動が変わるとします。"
+    },
+    {
+      "id": "mgt-05",
+      "year": 2024,
+      "subject": "management",
+      "category": "組織",
+      "difficulty": 2,
+      "question": "職能別に部門を分ける組織形態はどれか。",
+      "choices": ["事業部制組織", "機能別組織", "マトリクス組織", "社内ベンチャーのみ"],
+      "answer": 1,
+      "explanation": "製造・営業・経理などの職能で分けるのが機能別（職能別）組織です。"
+    },
+    {
+      "id": "mgt-06",
+      "year": 2023,
+      "subject": "management",
+      "category": "マーケティング",
+      "difficulty": 1,
+      "question": "マーケティングの4Pに含まれないものはどれか。",
+      "choices": ["Product", "Price", "People", "Place"],
+      "answer": 2,
+      "explanation": "伝統的4Pは Product, Price, Place, Promotion です。Peopleは7Pなどで使われます。"
+    },
+    {
+      "id": "mgt-07",
+      "year": 2025,
+      "subject": "management",
+      "category": "競争戦略",
+      "difficulty": 2,
+      "question": "ポーターの基本戦略に含まれないものはどれか。",
+      "choices": ["コスト・リーダーシップ", "差別化", "集中", "多角化"],
+      "answer": 3,
+      "explanation": "基本戦略はコスト・リーダーシップ、差別化、集中です。多角化は成長戦略の議論です。"
+    },
+    {
+      "id": "ops-01",
+      "year": 2023,
+      "subject": "operations",
+      "category": "QC七つ道具",
+      "difficulty": 2,
+      "question": "パレート図の主な用途として、最も適切なものはどれか。",
+      "choices": [
+        "不良原因の重要度を把握する",
+        "工程能力指数を計算する",
+        "在庫の発注点を決める",
+        "標準時間だけを求める"
+      ],
+      "answer": 0,
+      "explanation": "パレート図は重点志向で、影響の大きい要因を把握するために使います。"
+    },
+    {
+      "id": "ops-02",
+      "year": 2024,
+      "subject": "operations",
+      "category": "在庫",
+      "difficulty": 1,
+      "question": "経済的発注量（EOQ）の考え方として、最も適切なものはどれか。",
+      "choices": [
+        "発注費用と在庫費用のバランスで発注量を決める",
+        "安全在庫をゼロに固定する",
+        "需要予測を使わない",
+        "常に最大在庫で発注する"
+      ],
+      "answer": 0,
+      "explanation": "EOQは発注費用と保管費用のトレードオフを最適化します。"
+    },
+    {
+      "id": "ops-03",
+      "year": 2022,
+      "subject": "operations",
+      "category": "生産形態",
+      "difficulty": 2,
+      "question": "個別受注生産の特徴として、最も適切なものはどれか。",
+      "choices": [
+        "標準品を見込みで大量生産する",
+        "顧客仕様に合わせて都度生産する",
+        "ライン編成を固定し品種を1つに限る",
+        "在庫を持たない小売だけを指す"
+      ],
+      "answer": 1,
+      "explanation": "個別受注生産は、注文内容に応じて仕様を決めて生産します。"
+    },
+    {
+      "id": "ops-04",
+      "year": 2025,
+      "subject": "operations",
+      "category": "品質管理",
+      "difficulty": 1,
+      "question": "管理図の主な目的として、最も適切なものはどれか。",
+      "choices": [
+        "工程が統計的管理状態かを見る",
+        "財務レバレッジを測る",
+        "商標の類似を判定する",
+        "為替介入の規模を決める"
+      ],
+      "answer": 0,
+      "explanation": "管理図は工程のばらつきを監視し、異常がないかを見る道具です。"
+    },
+    {
+      "id": "ops-05",
+      "year": 2024,
+      "subject": "operations",
+      "category": "店舗立地",
+      "difficulty": 2,
+      "question": "小売店の立地で、徒歩圏の需要を重視する考え方に近いのはどれか。",
+      "choices": ["ハフモデルの無視", "商圏分析", "EOQのみ", "ABC分析のみ"],
+      "answer": 1,
+      "explanation": "来店可能性や距離を踏まえて需要を見るのが商圏分析です。"
+    },
+    {
+      "id": "ops-06",
+      "year": 2023,
+      "subject": "operations",
+      "category": "店舗運営",
+      "difficulty": 2,
+      "question": "人時生産性の説明として、最も適切なものはどれか。",
+      "choices": [
+        "売上高などを総労働時間（人時）で割った効率指標である",
+        "従業員数そのものを指す",
+        "棚卸資産回転日数と同じである",
+        "客単価の別名である"
+      ],
+      "answer": 0,
+      "explanation": "人時生産性は、投入した人時あたりの成果（売上など）です。"
+    },
+    {
+      "id": "ops-07",
+      "year": 2025,
+      "subject": "operations",
+      "category": "発注",
+      "difficulty": 2,
+      "question": "定量発注方式の説明として、最も適切なものはどれか。",
+      "choices": [
+        "在庫が発注点を下回ったら一定量を発注する",
+        "毎月同じ日に需要に関係なく発注しない",
+        "発注量を毎回ゼロにする",
+        "安全在庫を持たないことが定義である"
+      ],
+      "answer": 0,
+      "explanation": "定量発注は、発注点に達したら決められた量を発注する方式です。"
+    },
+    {
+      "id": "law-01",
+      "year": 2022,
+      "subject": "legal",
+      "category": "会社法",
+      "difficulty": 1,
+      "question": "株式会社の最高意思決定機関として、最も適切なものはどれか。",
+      "choices": ["取締役会", "監査役会", "株主総会", "会計監査人"],
+      "answer": 2,
+      "explanation": "株式会社の最高意思決定機関は株主総会です。"
+    },
+    {
+      "id": "law-02",
+      "year": 2024,
+      "subject": "legal",
+      "category": "独占禁止法",
+      "difficulty": 2,
+      "question": "私的独占の禁止などを定める法律として、最も適切なものはどれか。",
+      "choices": ["労働基準法", "独占禁止法", "下請法", "特許法"],
+      "answer": 1,
+      "explanation": "競争制限行為を規制する中核が独占禁止法です。"
+    },
+    {
+      "id": "law-03",
+      "year": 2023,
+      "subject": "legal",
+      "category": "下請法",
+      "difficulty": 2,
+      "question": "下請法の趣旨として、最も適切なものはどれか。",
+      "choices": [
+        "親事業者の優越的地位の濫用から下請事業者を守る",
+        "すべての消費者契約を無効にする",
+        "特許の存続期間を延ばす",
+        "最低賃金を決める"
+      ],
+      "answer": 0,
+      "explanation": "下請法は、代金支払遅延など親事業者の不当な取扱いを規制します。"
+    },
+    {
+      "id": "law-04",
+      "year": 2025,
+      "subject": "legal",
+      "category": "労働法",
+      "difficulty": 1,
+      "question": "労働契約において、労働条件の明示義務があるのは主にだれか。",
+      "choices": ["労働者のみ", "使用者", "株主", "取引先"],
+      "answer": 1,
+      "explanation": "使用者は、賃金・労働時間などの労働条件を明示する義務があります。"
+    },
+    {
+      "id": "law-05",
+      "year": 2024,
+      "subject": "legal",
+      "category": "知的財産",
+      "difficulty": 2,
+      "question": "発明を保護する権利として、最も適切なものはどれか。",
+      "choices": ["著作権", "商標権", "特許権", "意匠権のみ"],
+      "answer": 2,
+      "explanation": "発明の保護は特許権が中心です。意匠は物品のデザイン、商標は識別標識です。"
+    },
+    {
+      "id": "law-06",
+      "year": 2023,
+      "subject": "legal",
+      "category": "民法",
+      "difficulty": 2,
+      "question": "契約が成立する基本として、最も適切なものはどれか。",
+      "choices": [
+        "申込みと承諾の意思表示が合致すること",
+        "必ず公正証書が必要なこと",
+        "行政の許可が常に必要なこと",
+        "口頭では絶対に成立しないこと"
+      ],
+      "answer": 0,
+      "explanation": "契約は原則として申込みと承諾の合致で成立します（諾成契約が原則）。"
+    },
+    {
+      "id": "law-07",
+      "year": 2025,
+      "subject": "legal",
+      "category": "不正競争防止法",
+      "difficulty": 3,
+      "question": "不正競争防止法が規制しうる行為として、最も適切なものはどれか。",
+      "choices": [
+        "周知表示の混同惹起",
+        "株主総会の招集",
+        "最低賃金の決定",
+        "消費税の申告"
+      ],
+      "answer": 0,
+      "explanation": "周知な商品等表示と混同を生じさせる行為などは不正競争となり得ます。"
+    },
+    {
+      "id": "info-01",
+      "year": 2024,
+      "subject": "info",
+      "category": "ネットワーク",
+      "difficulty": 1,
+      "question": "OSI参照モデルで、IPアドレスによる転送に最も関係が深い層はどれか。",
+      "choices": ["物理層", "データリンク層", "ネットワーク層", "プレゼンテーション層"],
+      "answer": 2,
+      "explanation": "IPはネットワーク層の代表的プロトコルです。"
+    },
+    {
+      "id": "info-02",
+      "year": 2023,
+      "subject": "info",
+      "category": "データベース",
+      "difficulty": 2,
+      "question": "関係データベースで、繰り返しを除き属性を原子値にする正規化の第一歩はどれか。",
+      "choices": ["第1正規形", "第5正規形", "非正規形の維持", "階層型モデル化"],
+      "answer": 0,
+      "explanation": "第1正規形は、繰り返し項目をなくし原子的な値にします。"
+    },
+    {
+      "id": "info-03",
+      "year": 2025,
+      "subject": "info",
+      "category": "セキュリティ",
+      "difficulty": 1,
+      "question": "情報セキュリティのCIAのうち、Cは何を指すか。",
+      "choices": ["完全性", "機密性", "可用性", "監査"],
+      "answer": 1,
+      "explanation": "Cは Confidentiality（機密性）です。Iは完全性、Aは可用性です。"
+    },
+    {
+      "id": "info-04",
+      "year": 2024,
+      "subject": "info",
+      "category": "業務システム",
+      "difficulty": 2,
+      "question": "会計・販売・生産などを統合的に管理する基幹システムの総称はどれか。",
+      "choices": ["ERP", "CMSのみ", "GISのみ", "CADのみ"],
+      "answer": 0,
+      "explanation": "ERP（Enterprise Resource Planning）は基幹業務を統合します。"
+    },
+    {
+      "id": "info-05",
+      "year": 2022,
+      "subject": "info",
+      "category": "システム開発",
+      "difficulty": 2,
+      "question": "要件定義の後、外部設計・内部設計と進む伝統的な開発モデルはどれか。",
+      "choices": ["ウォーターフォール", "スクラムのみ", "カンバンのみ", "DevOpsの監視だけ"],
+      "answer": 0,
+      "explanation": "工程を順に進める代表がウォーターフォールモデルです。"
+    },
+    {
+      "id": "info-06",
+      "year": 2023,
+      "subject": "info",
+      "category": "ネットワーク",
+      "difficulty": 2,
+      "question": "Webページ閲覧で主に使われるアプリケーション層プロトコルはどれか。",
+      "choices": ["HTTP", "SMTPのみ", "FTPのみ", "ICMPのみ"],
+      "answer": 0,
+      "explanation": "WebはHTTP（およびHTTPS）が中心です。"
+    },
+    {
+      "id": "info-07",
+      "year": 2025,
+      "subject": "info",
+      "category": "知的財産",
+      "difficulty": 1,
+      "question": "プログラムの著作物を保護する中心となる権利はどれか。",
+      "choices": ["特許権のみ", "著作権", "実用新案権のみ", "回路配置利用権のみ"],
+      "answer": 1,
+      "explanation": "プログラムは著作権法上の著作物として保護されます。"
+    },
+    {
+      "id": "sme-01",
+      "year": 2024,
+      "subject": "sme",
+      "category": "中小企業基本法",
+      "difficulty": 1,
+      "question": "中小企業の範囲を業種ごとに資本金・従業員で定める中心法令はどれか。",
+      "choices": ["中小企業基本法", "独占禁止法", "会社法のみ", "労働契約法"],
+      "answer": 0,
+      "explanation": "中小企業の定義の基本は中小企業基本法に置かれます。"
+    },
+    {
+      "id": "sme-02",
+      "year": 2023,
+      "subject": "sme",
+      "category": "小規模企業",
+      "difficulty": 2,
+      "question": "小規模企業者の説明として、最も適切なものはどれか。",
+      "choices": [
+        "常時使用する従業員数が業種ごとに少ない事業者を指すことが多い",
+        "上場企業だけを指す",
+        "従業員1万人以上の企業だけを指す",
+        "国の機関だけを指す"
+      ],
+      "answer": 0,
+      "explanation": "小規模企業者は、従業員数が少ない事業者として政策上区分されます。"
+    },
+    {
+      "id": "sme-03",
+      "year": 2025,
+      "subject": "sme",
+      "category": "支援機関",
+      "difficulty": 1,
+      "question": "中小企業の経営相談の身近な公的窓口として、最も適切なものはどれか。",
+      "choices": [
+        "日本銀行の金融政策決定会合",
+        "商工会議所・商工会",
+        "最高裁判所",
+        "公正取引委員会の審判部のみ"
+      ],
+      "answer": 1,
+      "explanation": "商工会議所・商工会は地域の経営支援の拠点です。"
+    },
+    {
+      "id": "sme-04",
+      "year": 2024,
+      "subject": "sme",
+      "category": "補助金",
+      "difficulty": 2,
+      "question": "補助金の一般的な注意点として、最も適切なものはどれか。",
+      "choices": [
+        "後払いが多く、証拠書類の保存が重要である",
+        "使途は完全に自由で報告不要である",
+        "返済義務が必ずある融資と同じである",
+        "申請すれば必ず満額採択される"
+      ],
+      "answer": 0,
+      "explanation": "補助金は補助事業の実施と証拠に基づき精算されることが多く、融資とは異なります。"
+    },
+    {
+      "id": "sme-05",
+      "year": 2022,
+      "subject": "sme",
+      "category": "経営革新",
+      "difficulty": 2,
+      "question": "中小企業等経営強化法などに関する説明として、最も適切なものはどれか。",
+      "choices": [
+        "経営革新・経営力向上などの取組を後押しする政策がある",
+        "すべての中小企業の法人税をゼロにする",
+        "大企業の合併を義務づける",
+        "最低賃金を都道府県が決められなくする"
+      ],
+      "answer": 0,
+      "explanation": "経営革新や経営力向上計画など、成長・生産性向上を支援する枠組みがあります。"
+    },
+    {
+      "id": "sme-06",
+      "year": 2023,
+      "subject": "sme",
+      "category": "組合",
+      "difficulty": 2,
+      "question": "中小企業が共同で事業を行う組織形態として、最も適切なものはどれか。",
+      "choices": ["事業協同組合", "株式会社の取締役会", "監査役会", "会計監査人"],
+      "answer": 0,
+      "explanation": "事業協同組合は、中小企業が連携して共同事業を行う代表的な組合です。"
+    },
+    {
+      "id": "sme-07",
+      "year": 2025,
+      "subject": "sme",
+      "category": "政策",
+      "difficulty": 1,
+      "question": "中小企業政策の基本的なねらいとして、最も適切なものはどれか。",
+      "choices": [
+        "多様性ある中小企業の成長と経営基盤の強化",
+        "すべての企業を大企業に統合する",
+        "輸出を全面禁止する",
+        "地域金融機関を廃止する"
+      ],
+      "answer": 0,
+      "explanation": "中小企業政策は、雇用や地域経済を支える中小企業の自律的発展を支援します。"
+    }
+  ]
+}
