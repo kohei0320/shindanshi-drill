@@ -1,5 +1,12 @@
 const App = (() => {
 
+  "use strict";
+
+
+  /* =========================================================
+     State
+     ========================================================= */
+
   let questions = [];
 
   let state =
@@ -23,6 +30,10 @@ const App = (() => {
   const LEGACY_CUSTOM_QUESTIONS_KEY =
     "shindanshi_drill_custom_questions";
 
+
+  /* =========================================================
+     Screen
+     ========================================================= */
 
   const screens = {
 
@@ -74,17 +85,21 @@ const App = (() => {
   };
 
 
-  /* =========================
+  /* =========================================================
      共通
-     ========================= */
+     ========================================================= */
 
   function showScreen(name) {
 
     Object.keys(screens).forEach(
       (key) => {
 
-        screens[key].hidden =
-          key !== name;
+        if (screens[key]) {
+
+          screens[key].hidden =
+            key !== name;
+
+        }
 
       }
     );
@@ -116,9 +131,94 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /*
+   * =========================================================
+   * XSS対策
+   *
+   * ユーザー入力・AI生成データなどを
+   * innerHTMLへ入れる場合に必ず使用する。
+   * =========================================================
+   */
+
+  function escapeHTML(
+    value
+  ) {
+
+    if (
+      value === null ||
+      value === undefined
+    ) {
+
+      return "";
+
+    }
+
+
+    return String(value)
+      .replace(
+        /&/g,
+        "&amp;"
+      )
+      .replace(
+        /</g,
+        "&lt;"
+      )
+      .replace(
+        />/g,
+        "&gt;"
+      )
+      .replace(
+        /"/g,
+        "&quot;"
+      )
+      .replace(
+        /'/g,
+        "&#39;"
+      );
+
+  }
+
+
+  /*
+   * data属性などへ埋め込む値も
+   * escapeHTML()を通す。
+   */
+
+  function safeAttribute(
+    value
+  ) {
+
+    return escapeHTML(
+      value
+    );
+
+  }
+
+
+  /*
+   * innerHTMLで改行を表示したい場合
+   *
+   * HTMLとして解釈されない状態で
+   * 改行だけbrへ変換する。
+   */
+
+  function escapeHTMLWithBreaks(
+    value
+  ) {
+
+    return escapeHTML(
+      value
+    ).replace(
+      /\r?\n/g,
+      "<br>"
+    );
+
+  }
+
+
+  /* =========================================================
      自作問題
-     ========================= */
+     ========================================================= */
 
   function getCustomQuestions() {
 
@@ -155,9 +255,681 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
+     JSONスキーマ関連
+     ========================================================= */
+
+  /*
+   * アプリ内で使用する問題データの標準形。
+   *
+   * AI生成JSON
+   * 自作問題
+   * 旧データ
+   *
+   * すべて最終的にはこの形にする。
+   */
+
+  function createNormalizedQuestion(
+    source,
+    options = {}
+  ) {
+
+    const question =
+      source || {};
+
+
+    const now =
+      new Date().toISOString();
+
+
+    const normalized = {
+
+      id:
+        String(
+          question.id ||
+          `custom-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 8)}`
+        ),
+
+      year:
+        Number.isInteger(
+          Number(question.year)
+        )
+          ? Number(question.year)
+          : new Date().getFullYear(),
+
+      subject:
+        String(
+          question.subject ||
+          ""
+        ),
+
+      category:
+        String(
+          question.category ||
+          "その他"
+        ).trim(),
+
+      difficulty:
+        Number.isInteger(
+          Number(question.difficulty)
+        )
+          ? Number(question.difficulty)
+          : 2,
+
+      question:
+        String(
+          question.question ||
+          ""
+        ).trim(),
+
+      choices:
+        Array.isArray(
+          question.choices
+        )
+          ? question.choices
+              .slice(0, 4)
+              .map(
+                (choice) =>
+                  String(
+                    choice ??
+                    ""
+                  ).trim()
+              )
+          : ["", "", "", ""],
+
+      answer:
+        Number.isInteger(
+          Number(question.answer)
+        )
+          ? Number(question.answer)
+          : 0,
+
+      explanation:
+        String(
+          question.explanation ||
+          ""
+        ).trim(),
+
+      choiceExplanations:
+        Array.isArray(
+          question.choiceExplanations
+        )
+          ? [
+              0,
+              1,
+              2,
+              3
+            ].map(
+              (index) =>
+                String(
+                  question
+                    .choiceExplanations[
+                      index
+                    ] ??
+                    ""
+                ).trim()
+            )
+          : ["", "", "", ""],
+
+      keyPoint:
+        String(
+          question.keyPoint ||
+          ""
+        ).trim(),
+
+      relatedKnowledge:
+        normalizeRelatedKnowledge(
+          question.relatedKnowledge
+        ),
+
+      mistakePoint:
+        String(
+          question.mistakePoint ||
+          ""
+        ).trim(),
+
+      custom:
+        options.custom !== undefined
+          ? options.custom
+          : !!question.custom,
+
+      sourceType:
+        String(
+          question.sourceType ||
+          (
+            options.sourceType ||
+            "manual"
+          )
+        ),
+
+      createdAt:
+        question.createdAt ||
+        now,
+
+      updatedAt:
+        question.updatedAt ||
+        now,
+
+      importedAt:
+        question.importedAt ||
+        undefined
+
+    };
+
+
+    /*
+     * undefinedプロパティを削除
+     */
+
+    Object.keys(
+      normalized
+    ).forEach(
+      (key) => {
+
+        if (
+          normalized[key] ===
+          undefined
+        ) {
+
+          delete normalized[key];
+
+        }
+
+      }
+    );
+
+
+    return normalized;
+
+  }
+
+
+  function normalizeRelatedKnowledge(
+    value
+  ) {
+
+    if (
+      !Array.isArray(value)
+    ) {
+
+      return [];
+
+    }
+
+
+    return value
+      .map(
+        (item) => {
+
+          if (
+            typeof item ===
+            "string"
+          ) {
+
+            return {
+
+              title: "",
+
+              body:
+                item.trim()
+
+            };
+
+          }
+
+
+          if (
+            item &&
+            typeof item ===
+            "object"
+          ) {
+
+            return {
+
+              title:
+                String(
+                  item.title ||
+                  ""
+                ).trim(),
+
+              body:
+                String(
+                  item.body ||
+                  ""
+                ).trim()
+
+            };
+
+          }
+
+
+          return null;
+
+        }
+      )
+      .filter(
+        (item) =>
+          item &&
+          item.body
+      );
+
+  }
+
+
+  /*
+   * JSONインポート時の厳格な検証
+   */
+
+  function validateQuestionSchema(
+    question,
+    index = 0
+  ) {
+
+    const label =
+      `${index + 1}問目`;
+
+
+    if (
+      !question ||
+      typeof question !==
+        "object" ||
+      Array.isArray(question)
+    ) {
+
+      throw new Error(
+        `${label}：問題データがオブジェクトではありません。`
+      );
+
+    }
+
+
+    /*
+     * subject
+     */
+
+    if (
+      typeof question.subject !==
+      "string" ||
+      !question.subject.trim()
+    ) {
+
+      throw new Error(
+        `${label}：subjectがありません。`
+      );
+
+    }
+
+
+    const subjectExists =
+      APP_CONFIG.subjects.some(
+        (subject) =>
+          subject.id ===
+          question.subject
+      );
+
+
+    if (!subjectExists) {
+
+      throw new Error(
+        `${label}：存在しない科目IDです「${question.subject}」。`
+      );
+
+    }
+
+
+    /*
+     * category
+     */
+
+    if (
+      typeof question.category !==
+      "string" ||
+      !question.category.trim()
+    ) {
+
+      throw new Error(
+        `${label}：categoryがありません。`
+      );
+
+    }
+
+
+    /*
+     * question
+     */
+
+    if (
+      typeof question.question !==
+      "string" ||
+      !question.question.trim()
+    ) {
+
+      throw new Error(
+        `${label}：questionがありません。`
+      );
+
+    }
+
+
+    /*
+     * choices
+     */
+
+    if (
+      !Array.isArray(
+        question.choices
+      ) ||
+      question.choices.length !== 4
+    ) {
+
+      throw new Error(
+        `${label}：choicesは4個必要です。`
+      );
+
+    }
+
+
+    question.choices.forEach(
+      (choice, choiceIndex) => {
+
+        if (
+          typeof choice !==
+            "string" ||
+          !choice.trim()
+        ) {
+
+          throw new Error(
+            `${label}：選択肢${choiceIndex + 1}が空です。`
+          );
+
+        }
+
+      }
+    );
+
+
+    /*
+     * answer
+     */
+
+    if (
+      !Number.isInteger(
+        question.answer
+      ) ||
+      question.answer < 0 ||
+      question.answer > 3
+    ) {
+
+      throw new Error(
+        `${label}：answerは0～3の整数で指定してください。`
+      );
+
+    }
+
+
+    /*
+     * difficulty
+     */
+
+    if (
+      !Number.isInteger(
+        question.difficulty
+      ) ||
+      question.difficulty < 1 ||
+      question.difficulty > 5
+    ) {
+
+      throw new Error(
+        `${label}：difficultyは1～5の整数で指定してください。`
+      );
+
+    }
+
+
+    /*
+     * explanation
+     */
+
+    if (
+      question.explanation !==
+        undefined &&
+      typeof question.explanation !==
+        "string"
+    ) {
+
+      throw new Error(
+        `${label}：explanationは文字列で指定してください。`
+      );
+
+    }
+
+
+    /*
+     * choiceExplanations
+     *
+     * 存在する場合は4個
+     */
+
+    if (
+      question.choiceExplanations !==
+        undefined
+    ) {
+
+      if (
+        !Array.isArray(
+          question.choiceExplanations
+        ) ||
+        question.choiceExplanations.length !==
+          4
+      ) {
+
+        throw new Error(
+          `${label}：choiceExplanationsは4個必要です。`
+        );
+
+      }
+
+
+      question.choiceExplanations.forEach(
+        (
+          explanation,
+          explanationIndex
+        ) => {
+
+          if (
+            typeof explanation !==
+            "string"
+          ) {
+
+            throw new Error(
+              `${label}：choiceExplanations[${explanationIndex}]は文字列で指定してください。`
+            );
+
+          }
+
+        }
+      );
+
+    }
+
+
+    /*
+     * keyPoint
+     */
+
+    if (
+      question.keyPoint !==
+        undefined &&
+      typeof question.keyPoint !==
+        "string"
+    ) {
+
+      throw new Error(
+        `${label}：keyPointは文字列で指定してください。`
+      );
+
+    }
+
+
+    /*
+     * relatedKnowledge
+     */
+
+    if (
+      question.relatedKnowledge !==
+        undefined
+    ) {
+
+      if (
+        !Array.isArray(
+          question.relatedKnowledge
+        )
+      ) {
+
+        throw new Error(
+          `${label}：relatedKnowledgeは配列で指定してください。`
+        );
+
+      }
+
+
+      question.relatedKnowledge.forEach(
+        (
+          item,
+          relatedIndex
+        ) => {
+
+          if (
+            !item ||
+            typeof item !==
+              "object" ||
+            Array.isArray(item)
+          ) {
+
+            throw new Error(
+              `${label}：relatedKnowledge[${relatedIndex}]が不正です。`
+            );
+
+          }
+
+
+          if (
+            item.title !==
+              undefined &&
+            typeof item.title !==
+              "string"
+          ) {
+
+            throw new Error(
+              `${label}：relatedKnowledge[${relatedIndex}].titleは文字列で指定してください。`
+            );
+
+          }
+
+
+          if (
+            item.body !==
+              undefined &&
+            typeof item.body !==
+              "string"
+          ) {
+
+            throw new Error(
+              `${label}：relatedKnowledge[${relatedIndex}].bodyは文字列で指定してください。`
+            );
+
+          }
+
+        }
+      );
+
+    }
+
+
+    /*
+     * year
+     */
+
+    if (
+      question.year !==
+        undefined &&
+      (
+        !Number.isInteger(
+          question.year
+        ) ||
+        question.year < 1900 ||
+        question.year > 2100
+      )
+    ) {
+
+      throw new Error(
+        `${label}：yearが不正です。`
+      );
+
+    }
+
+
+    return true;
+
+  }
+
+
+  /*
+   * インポート用正規化
+   */
+
+  function normalizeImportedQuestion(
+    question,
+    index
+  ) {
+
+    /*
+     * まず入力そのものを検証
+     */
+
+    validateQuestionSchema(
+      question,
+      index
+    );
+
+
+    /*
+     * アプリ標準形へ変換
+     */
+
+    const normalized =
+      createNormalizedQuestion(
+        question,
+        {
+          custom: true,
+          sourceType:
+            question.sourceType ||
+            "ai"
+        }
+      );
+
+
+    /*
+     * 再度、正規化後のデータを
+     * 検証する。
+     */
+
+    validateQuestionSchema(
+      normalized,
+      index
+    );
+
+
+    return normalized;
+
+  }
+
+
+  /* =========================================================
      旧localStorage問題の移行
-     ========================= */
+     ========================================================= */
 
   async function migrateLegacyCustomQuestions() {
 
@@ -177,7 +949,9 @@ const App = (() => {
 
 
       const legacyQuestions =
-        JSON.parse(raw);
+        JSON.parse(
+          raw
+        );
 
 
       if (
@@ -195,11 +969,6 @@ const App = (() => {
 
       }
 
-
-      /*
-       * 既にIndexedDBに存在するIDは
-       * 上書きせずスキップする。
-       */
 
       const existingIds =
         new Set(
@@ -221,16 +990,24 @@ const App = (() => {
               )
           )
           .map(
-            (question) => ({
+            (question) => {
 
-              ...question,
+              /*
+               * 旧データについては
+               * 可能な範囲で標準形へ変換する。
+               */
 
-              custom: true,
+              return createNormalizedQuestion(
+                question,
+                {
+                  custom: true,
+                  sourceType:
+                    question.sourceType ||
+                    "manual"
+                }
+              );
 
-              migratedAt:
-                new Date().toISOString()
-
-            })
+            }
           );
 
 
@@ -246,17 +1023,13 @@ const App = (() => {
 
 
       /*
-       * 移行後はIndexedDBを正とする。
+       * 移行成功後のみ削除
        */
 
       localStorage.removeItem(
         LEGACY_CUSTOM_QUESTIONS_KEY
       );
 
-
-      /*
-       * 問題一覧を再取得
-       */
 
       questions =
         await QuestionDB.getAll();
@@ -280,7 +1053,7 @@ const App = (() => {
 
 
       /*
-       * 移行に失敗した場合は
+       * 失敗した場合は
        * localStorageを削除しない。
        */
 
@@ -291,9 +1064,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      問題読み込み
-     ========================= */
+     ========================================================= */
 
   async function loadQuestions() {
 
@@ -323,9 +1096,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      今日の問題
-     ========================= */
+     ========================================================= */
 
   function todaysDaily() {
 
@@ -649,9 +1422,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      科目
-     ========================= */
+     ========================================================= */
 
   function renderSubjects() {
 
@@ -701,13 +1474,13 @@ const App = (() => {
               <button
                 class="subject-card"
                 type="button"
-                data-subject="${subject.id}"
+                data-subject="${safeAttribute(subject.id)}"
               >
 
                 <span
                   class="subject-card-name"
                 >
-                  ${subject.name}
+                  ${escapeHTML(subject.name)}
                 </span>
 
 
@@ -859,13 +1632,15 @@ const App = (() => {
               <button
                 class="category-card"
                 type="button"
-                data-category="${encodeURIComponent(category)}"
+                data-category="${safeAttribute(
+                  encodeURIComponent(category)
+                )}"
               >
 
                 <span
                   class="category-card-name"
                 >
-                  ${category}
+                  ${escapeHTML(category)}
                 </span>
 
 
@@ -900,9 +1675,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      分野
-     ========================= */
+     ========================================================= */
 
   function openCategory(
     category
@@ -978,12 +1753,12 @@ const App = (() => {
         <p
           class="category-summary-subject"
         >
-          ${subject.name}
+          ${escapeHTML(subject.name)}
         </p>
 
 
         <h2>
-          ${category}
+          ${escapeHTML(category)}
         </h2>
 
 
@@ -1153,9 +1928,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      弱点
-     ========================= */
+     ========================================================= */
 
   function renderWeakCategories() {
 
@@ -1256,18 +2031,24 @@ const App = (() => {
               <button
                 class="weak-category-card"
                 type="button"
-                data-subject="${item.subject}"
-                data-category="${encodeURIComponent(item.category)}"
+                data-subject="${safeAttribute(
+                  item.subject
+                )}"
+                data-category="${safeAttribute(
+                  encodeURIComponent(
+                    item.category
+                  )
+                )}"
               >
 
                 <span>
 
                   <strong>
-                    ${item.category}
+                    ${escapeHTML(item.category)}
                   </strong>
 
                   <small>
-                    ${item.subjectName}
+                    ${escapeHTML(item.subjectName)}
                   </small>
 
                 </span>
@@ -1290,9 +2071,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      HOME
-     ========================= */
+     ========================================================= */
 
   function renderHome() {
 
@@ -1442,9 +2223,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      QUIZ
-     ========================= */
+     ========================================================= */
 
   function renderQuiz() {
 
@@ -1476,6 +2257,13 @@ const App = (() => {
     ).textContent =
       `${getSubjectName(question.subject)} ／ ${question.category || "その他"} ／ 難易度${question.difficulty}`;
 
+
+    /*
+     * 問題文はtextContentを使用。
+     *
+     * HTMLとして解釈されないため
+     * XSS対策になる。
+     */
 
     document.getElementById(
       "quiz-question"
@@ -1656,9 +2444,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      解説
-     ========================= */
+     ========================================================= */
 
   function renderExplain() {
 
@@ -1686,6 +2474,10 @@ const App = (() => {
         : "badge ng";
 
 
+    /*
+     * 問題文はtextContent
+     */
+
     document.getElementById(
       "explain-question"
     ).textContent =
@@ -1705,6 +2497,10 @@ const App = (() => {
         ]
       }`;
 
+
+    /*
+     * 解説本文もtextContent
+     */
 
     document.getElementById(
       "explain-body"
@@ -1739,6 +2535,11 @@ const App = (() => {
       choiceSection.hidden =
         false;
 
+
+      /*
+       * innerHTMLを使用するが、
+       * 問題データはすべてescapeHTML()を通す。
+       */
 
       choiceContainer.innerHTML =
         question.choices
@@ -1788,7 +2589,7 @@ const App = (() => {
                     <span
                       class="choice-text"
                     >
-                      ${choice}
+                      ${escapeHTML(choice)}
                     </span>
 
 
@@ -1808,7 +2609,9 @@ const App = (() => {
                   <div
                     class="choice-explanation-body"
                   >
-                    ${explanation}
+                    ${escapeHTMLWithBreaks(
+                      explanation
+                    )}
                   </div>
 
                 </details>
@@ -1903,11 +2706,15 @@ const App = (() => {
               >
 
                 <h4>
-                  ${item.title || ""}
+                  ${escapeHTML(
+                    item.title || ""
+                  )}
                 </h4>
 
                 <p>
-                  ${item.body || ""}
+                  ${escapeHTMLWithBreaks(
+                    item.body || ""
+                  )}
                 </p>
 
               </div>
@@ -2038,9 +2845,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      FAVORITES
-     ========================= */
+     ========================================================= */
 
   function renderFavorites() {
 
@@ -2102,19 +2909,30 @@ const App = (() => {
                 <button
                   class="favorite-item"
                   type="button"
-                  data-id="${question.id}"
+                  data-id="${safeAttribute(
+                    question.id
+                  )}"
                 >
 
                   <span
                     class="fav-subject"
                   >
-                    ${getSubjectName(question.subject)}
+                    ${escapeHTML(
+                      getSubjectName(
+                        question.subject
+                      )
+                    )}
                     ／
-                    ${question.category || "その他"}
+                    ${escapeHTML(
+                      question.category ||
+                      "その他"
+                    )}
                   </span>
 
 
-                  ${question.question}
+                  ${escapeHTML(
+                    question.question
+                  )}
 
                 </button>
 
@@ -2134,9 +2952,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      自作問題フォーム
-     ========================= */
+     ========================================================= */
 
   function populateSubjectSelect() {
 
@@ -2452,9 +3270,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      問題入力
-     ========================= */
+     ========================================================= */
 
   async function saveNewQuestion() {
 
@@ -2536,14 +3354,32 @@ const App = (() => {
       ).value.trim();
 
 
-    /* =========================
+    /* =====================================================
        入力チェック
-       ========================= */
+       ===================================================== */
 
     if (!subject) {
 
       alert(
         "科目を選択してください。"
+      );
+
+      return;
+
+    }
+
+
+    const subjectExists =
+      APP_CONFIG.subjects.some(
+        (item) =>
+          item.id === subject
+      );
+
+
+    if (!subjectExists) {
+
+      alert(
+        "存在しない科目が指定されています。"
       );
 
       return;
@@ -2591,6 +3427,23 @@ const App = (() => {
 
     if (
       !Number.isInteger(
+        difficulty
+      ) ||
+      difficulty < 1 ||
+      difficulty > 5
+    ) {
+
+      alert(
+        "難易度は1～5で指定してください。"
+      );
+
+      return;
+
+    }
+
+
+    if (
+      !Number.isInteger(
         answer
       ) ||
       answer < 0 ||
@@ -2606,9 +3459,9 @@ const App = (() => {
     }
 
 
-    /* =========================
+    /* =====================================================
        関連知識
-       ========================= */
+       ===================================================== */
 
     const relatedKnowledge =
       relatedText
@@ -2631,9 +3484,9 @@ const App = (() => {
         : [];
 
 
-    /* =========================
+    /* =====================================================
        編集
-       ========================= */
+       ===================================================== */
 
     if (
       editingQuestionId
@@ -2661,43 +3514,67 @@ const App = (() => {
       }
 
 
-      const updatedQuestion = {
+      const updatedQuestion =
+        createNormalizedQuestion(
+          {
 
-        ...oldQuestion,
+            ...oldQuestion,
 
-        subject,
+            subject,
 
-        category,
+            category,
 
-        difficulty,
+            difficulty,
 
-        question:
-          questionText,
+            question:
+              questionText,
 
-        choices,
+            choices,
 
-        answer,
+            answer,
 
-        explanation,
+            explanation,
 
-        choiceExplanations,
+            choiceExplanations,
 
-        keyPoint,
+            keyPoint,
 
-        relatedKnowledge,
+            relatedKnowledge,
 
-        updatedAt:
-          new Date().toISOString()
+            custom: true,
 
-      };
+            sourceType:
+              oldQuestion.sourceType ||
+              "manual",
+
+            updatedAt:
+              new Date().toISOString()
+
+          },
+          {
+            custom: true,
+
+            sourceType:
+              oldQuestion.sourceType ||
+              "manual"
+          }
+        );
 
 
       try {
+
+        /*
+         * IndexedDBへ保存
+         */
 
         await QuestionDB.put(
           updatedQuestion
         );
 
+
+        /*
+         * アプリ内も更新
+         */
 
         const appIndex =
           questions.findIndex(
@@ -2751,50 +3628,59 @@ const App = (() => {
     }
 
 
-    /* =========================
+    /* =====================================================
        新規作成
-       ========================= */
+       ===================================================== */
 
-    const newQuestion = {
+    const newQuestion =
+      createNormalizedQuestion(
+        {
 
-      id:
-        `custom-${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2, 8)}`,
+          id:
+            `custom-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2, 8)}`,
 
-      year:
-        new Date().getFullYear(),
+          year:
+            new Date().getFullYear(),
 
-      subject,
+          subject,
 
-      category,
+          category,
 
-      difficulty,
+          difficulty,
 
-      question:
-        questionText,
+          question:
+            questionText,
 
-      choices,
+          choices,
 
-      answer,
+          answer,
 
-      explanation,
+          explanation,
 
-      choiceExplanations,
+          choiceExplanations,
 
-      keyPoint,
+          keyPoint,
 
-      relatedKnowledge,
+          relatedKnowledge,
 
-      custom: true,
+          custom: true,
 
-      sourceType:
-        "manual",
+          sourceType:
+            "manual",
 
-      createdAt:
-        new Date().toISOString()
+          createdAt:
+            new Date().toISOString()
 
-    };
+        },
+        {
+          custom: true,
+
+          sourceType:
+            "manual"
+        }
+      );
 
 
     try {
@@ -2845,9 +3731,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      自作問題削除
-     ========================= */
+     ========================================================= */
 
   async function deleteQuestion(
     id
@@ -2973,11 +3859,6 @@ const App = (() => {
       );
 
 
-      /*
-       * 編集画面から削除した場合は
-       * 管理画面へ戻す
-       */
-
       editingQuestionId =
         null;
 
@@ -3002,9 +3883,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      自作問題管理
-     ========================= */
+     ========================================================= */
 
   function renderManageQuestions() {
 
@@ -3130,7 +4011,7 @@ const App = (() => {
         >
 
           <p>
-            「${keyword}」に一致する問題はありません。
+            「${escapeHTML(keyword)}」に一致する問題はありません。
           </p>
 
         </div>
@@ -3164,19 +4045,27 @@ const App = (() => {
                 >
 
                   <span>
-                    ${getSubjectName(
-                      question.subject
+                    ${escapeHTML(
+                      getSubjectName(
+                        question.subject
+                      )
                     )}
                   </span>
 
 
                   <span>
-                    ${question.category || "その他"}
+                    ${escapeHTML(
+                      question.category ||
+                      "その他"
+                    )}
                   </span>
 
 
                   <span>
-                    難易度${question.difficulty || 2}
+                    難易度${escapeHTML(
+                      question.difficulty ||
+                      2
+                    )}
                   </span>
 
                 </div>
@@ -3185,7 +4074,9 @@ const App = (() => {
                 <h3
                   class="custom-question-title"
                 >
-                  ${question.question}
+                  ${escapeHTML(
+                    question.question
+                  )}
                 </h3>
 
 
@@ -3196,7 +4087,9 @@ const App = (() => {
                   <button
                     type="button"
                     class="btn small-btn edit-custom-question"
-                    data-id="${question.id}"
+                    data-id="${safeAttribute(
+                      question.id
+                    )}"
                   >
                     編集
                   </button>
@@ -3205,7 +4098,9 @@ const App = (() => {
                   <button
                     type="button"
                     class="btn small-btn danger delete-custom-question"
-                    data-id="${question.id}"
+                    data-id="${safeAttribute(
+                      question.id
+                    )}"
                   >
                     削除
                   </button>
@@ -3228,116 +4123,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      AI問題JSONインポート
-     ========================= */
-
-  function normalizeImportedQuestion(
-    question,
-    index
-  ) {
-
-    if (
-      !question ||
-      typeof question !==
-        "object"
-    ) {
-
-      throw new Error(
-        `${index + 1}問目のデータが不正です。`
-      );
-
-    }
-
-
-    if (
-      !question.subject
-    ) {
-
-      throw new Error(
-        `${index + 1}問目：科目がありません。`
-      );
-
-    }
-
-
-    if (
-      !question.category
-    ) {
-
-      throw new Error(
-        `${index + 1}問目：分野がありません。`
-      );
-
-    }
-
-
-    if (
-      !question.question
-    ) {
-
-      throw new Error(
-        `${index + 1}問目：問題文がありません。`
-      );
-
-    }
-
-
-    if (
-      !Array.isArray(
-        question.choices
-      ) ||
-      question.choices.length !== 4
-    ) {
-
-      throw new Error(
-        `${index + 1}問目：選択肢は4つ必要です。`
-      );
-
-    }
-
-
-    if (
-      !Number.isInteger(
-        question.answer
-      ) ||
-      question.answer < 0 ||
-      question.answer > 3
-    ) {
-
-      throw new Error(
-        `${index + 1}問目：正解番号が不正です。`
-      );
-
-    }
-
-
-    const id =
-      question.id ||
-      `ai-${Date.now()}-${index}-${Math.random()
-        .toString(36)
-        .slice(2, 8)}`;
-
-
-    return {
-
-      ...question,
-
-      id,
-
-      custom: true,
-
-      sourceType:
-        question.sourceType ||
-        "ai",
-
-      importedAt:
-        new Date().toISOString()
-
-    };
-
-  }
-
+     ========================================================= */
 
   async function importQuestionsFromFile(
     file
@@ -3352,20 +4140,86 @@ const App = (() => {
 
     try {
 
+      /*
+       * ファイル形式チェック
+       */
+
+      if (
+        file.type &&
+        file.type !==
+          "application/json" &&
+        !file.name.toLowerCase().endsWith(
+          ".json"
+        )
+      ) {
+
+        throw new Error(
+          "JSONファイルを選択してください。"
+        );
+
+      }
+
+
       const text =
         await file.text();
 
 
-      const data =
-        JSON.parse(
-          text
+      if (
+        !text.trim()
+      ) {
+
+        throw new Error(
+          "JSONファイルが空です。"
         );
 
+      }
+
+
+      let data;
+
+
+      try {
+
+        data =
+          JSON.parse(
+            text
+          );
+
+      } catch (parseError) {
+
+        throw new Error(
+          "JSONの形式が正しくありません。"
+        );
+
+      }
+
+
+      /*
+       * 以下の2形式を許可
+       *
+       * [
+       *   {...},
+       *   {...}
+       * ]
+       *
+       * または
+       *
+       * {
+       *   "questions": [
+       *     {...}
+       *   ]
+       * }
+       */
 
       const importedQuestions =
         Array.isArray(data)
           ? data
-          : data.questions;
+          : data &&
+            Array.isArray(
+              data.questions
+            )
+            ? data.questions
+            : null;
 
 
       if (
@@ -3393,7 +4247,28 @@ const App = (() => {
 
 
       /*
-       * 既存IDを取得
+       * 一度に大量投入しすぎることを
+       * 防ぐ。
+       */
+
+      const MAX_IMPORT_QUESTIONS =
+        1000;
+
+
+      if (
+        importedQuestions.length >
+        MAX_IMPORT_QUESTIONS
+      ) {
+
+        throw new Error(
+          `一度に取り込める問題は${MAX_IMPORT_QUESTIONS}問までです。`
+        );
+
+      }
+
+
+      /*
+       * 既存ID
        */
 
       const existingIds =
@@ -3407,6 +4282,11 @@ const App = (() => {
 
       /*
        * JSONを正規化
+       *
+       * ここで全問題を検証する。
+       *
+       * 1問でも不正なら
+       * 全体を保存しない。
        */
 
       const normalized =
@@ -3414,30 +4294,58 @@ const App = (() => {
           (
             question,
             index
-          ) => {
-
-            const normalizedQuestion =
-              normalizeImportedQuestion(
-                question,
-                index
-              );
-
-
-            /*
-             * IDが既存の場合は
-             * 上書きする。
-             *
-             * 新規IDなら追加する。
-             */
-
-            return normalizedQuestion;
-
-          }
+          ) =>
+            normalizeImportedQuestion(
+              question,
+              index
+            )
         );
 
 
       /*
+       * ID重複もチェック
+       *
+       * 同じJSON内に同一IDが複数ある場合は
+       * 意図しない上書きを防止する。
+       */
+
+      const importIds =
+        new Set();
+
+
+      normalized.forEach(
+        (
+          question,
+          index
+        ) => {
+
+          if (
+            importIds.has(
+              question.id
+            )
+          ) {
+
+            throw new Error(
+              `${index + 1}問目：ID「${question.id}」がJSON内で重複しています。`
+            );
+
+          }
+
+
+          importIds.add(
+            question.id
+          );
+
+        }
+      );
+
+
+      /*
        * IndexedDBへ保存
+       *
+       * putなので
+       * 既存ID → 更新
+       * 新規ID → 追加
        */
 
       await QuestionDB.putMany(
@@ -3504,9 +4412,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      復習
-     ========================= */
+     ========================================================= */
 
   function startReview() {
 
@@ -3540,9 +4448,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      お気に入り演習
-     ========================= */
+     ========================================================= */
 
   function startFavoriteSession(
     ids
@@ -3571,9 +4479,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      イベント
-     ========================= */
+     ========================================================= */
 
   function bindEvents() {
 
@@ -3761,7 +4669,7 @@ const App = (() => {
 
         /*
          * 同じJSONファイルを
-         * 再度選択できるようにする
+         * 再度選択できるようにする。
          */
 
         event.target.value =
@@ -4078,9 +4986,9 @@ const App = (() => {
   }
 
 
-  /* =========================
+  /* =========================================================
      Start
-     ========================= */
+     ========================================================= */
 
   async function start() {
 
@@ -4164,6 +5072,10 @@ const App = (() => {
   }
 
 
+  /* =========================================================
+     Public API
+     ========================================================= */
+
   return {
 
     start
@@ -4172,6 +5084,10 @@ const App = (() => {
 
 })();
 
+
+/* =========================================================
+   DOM Ready
+   ========================================================= */
 
 document.addEventListener(
   "DOMContentLoaded",
