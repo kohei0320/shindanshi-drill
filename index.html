@@ -889,7 +889,21 @@
       id="custom-question-list"
       class="custom-question-list"
     ></div>
-
+    <input
+    id="question-import-file"
+    type="file"
+    accept=".json,application/json"
+    hidden
+  />
+  
+  <button
+    id="btn-import-questions"
+    class="btn"
+    type="button"
+  >
+    AI問題を一括インポート
+  </button>
+  
   </section>
 
 
@@ -935,6 +949,7 @@
 
 <script src="js/config.js"></script>
 <script src="js/storage.js"></script>
+<script src="js/question-db.js"></script>
 <script src="js/selector.js"></script>
 <script src="js/stats.js"></script>
 <script src="js/quiz.js"></script>

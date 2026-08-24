@@ -2,7 +2,8 @@ const App = (() => {
 
   let questions = [];
 
-  let state = Storage.emptyState();
+  let state =
+    Storage.emptyState();
 
   let lastResult = null;
 
@@ -13,7 +14,13 @@ const App = (() => {
   let editingQuestionId = null;
 
 
-  const CUSTOM_QUESTIONS_KEY =
+  /*
+   * 旧バージョンで使用していた
+   * localStorageのキー
+   *
+   * 今後はIndexedDBを正規の保存先とする。
+   */
+  const LEGACY_CUSTOM_QUESTIONS_KEY =
     "shindanshi_drill_custom_questions";
 
 
@@ -82,18 +89,25 @@ const App = (() => {
       }
     );
 
-    window.scrollTo(0, 0);
+
+    window.scrollTo(
+      0,
+      0
+    );
 
   }
 
 
-  function getSubjectName(subjectId) {
+  function getSubjectName(
+    subjectId
+  ) {
 
     const subject =
       APP_CONFIG.subjects.find(
         (item) =>
           item.id === subjectId
       );
+
 
     return subject
       ? subject.name
@@ -106,49 +120,12 @@ const App = (() => {
      自作問題
      ========================= */
 
-  function loadCustomQuestions() {
+  function getCustomQuestions() {
 
-    try {
-
-      const raw =
-        localStorage.getItem(
-          CUSTOM_QUESTIONS_KEY
-        );
-
-      if (!raw) {
-        return [];
-      }
-
-      const data =
-        JSON.parse(raw);
-
-      return Array.isArray(data)
-        ? data
-        : [];
-
-    } catch (error) {
-
-      console.error(
-        "自作問題の読み込みに失敗しました",
-        error
-      );
-
-      return [];
-
-    }
-
-  }
-
-
-  function saveCustomQuestions(
-    customQuestions
-  ) {
-
-    localStorage.setItem(
-      CUSTOM_QUESTIONS_KEY,
-      JSON.stringify(
-        customQuestions
-      )
+    return questions.filter(
+      (question) =>
+        question &&
+        question.custom === true
     );
 
   }
@@ -166,7 +143,9 @@ const App = (() => {
   }
 
 
-  function questionById(id) {
+  function questionById(
+    id
+  ) {
 
     return questions.find(
       (question) =>
@@ -177,37 +156,169 @@ const App = (() => {
 
 
   /* =========================
+     旧localStorage問題の移行
+     ========================= */
+
+  async function migrateLegacyCustomQuestions() {
+
+    try {
+
+      const raw =
+        localStorage.getItem(
+          LEGACY_CUSTOM_QUESTIONS_KEY
+        );
+
+
+      if (!raw) {
+
+        return 0;
+
+      }
+
+
+      const legacyQuestions =
+        JSON.parse(raw);
+
+
+      if (
+        !Array.isArray(
+          legacyQuestions
+        ) ||
+        !legacyQuestions.length
+      ) {
+
+        localStorage.removeItem(
+          LEGACY_CUSTOM_QUESTIONS_KEY
+        );
+
+        return 0;
+
+      }
+
+
+      /*
+       * 既にIndexedDBに存在するIDは
+       * 上書きせずスキップする。
+       */
+
+      const existingIds =
+        new Set(
+          questions.map(
+            (question) =>
+              question.id
+          )
+        );
+
+
+      const migrationQuestions =
+        legacyQuestions
+          .filter(
+            (question) =>
+              question &&
+              question.id &&
+              !existingIds.has(
+                question.id
+              )
+          )
+          .map(
+            (question) => ({
+
+              ...question,
+
+              custom: true,
+
+              migratedAt:
+                new Date().toISOString()
+
+            })
+          );
+
+
+      if (
+        migrationQuestions.length
+      ) {
+
+        await QuestionDB.putMany(
+          migrationQuestions
+        );
+
+      }
+
+
+      /*
+       * 移行後はIndexedDBを正とする。
+       */
+
+      localStorage.removeItem(
+        LEGACY_CUSTOM_QUESTIONS_KEY
+      );
+
+
+      /*
+       * 問題一覧を再取得
+       */
+
+      questions =
+        await QuestionDB.getAll();
+
+
+      console.log(
+        `旧自作問題を${migrationQuestions.length}問IndexedDBへ移行しました`
+      );
+
+
+      return (
+        migrationQuestions.length
+      );
+
+    } catch (error) {
+
+      console.error(
+        "旧自作問題の移行に失敗しました",
+        error
+      );
+
+
+      /*
+       * 移行に失敗した場合は
+       * localStorageを削除しない。
+       */
+
+      return 0;
+
+    }
+
+  }
+
+
+  /* =========================
      問題読み込み
      ========================= */
 
   async function loadQuestions() {
 
-    const response =
-      await fetch(
-        "data/questions.json"
+    try {
+
+      questions =
+        await QuestionDB.getAll();
+
+
+      console.log(
+        `問題を${questions.length}問読み込みました`
       );
 
-    if (!response.ok) {
 
-      throw new Error(
-        "問題データの読み込みに失敗しました"
+    } catch (error) {
+
+      console.error(
+        "問題データの読み込みに失敗しました",
+        error
       );
+
+
+      throw error;
 
     }
-
-    const data =
-      await response.json();
-
-    const baseQuestions =
-      data.questions || [];
-
-    const customQuestions =
-      loadCustomQuestions();
-
-    questions = [
-      ...baseQuestions,
-      ...customQuestions
-    ];
 
   }
 
@@ -220,12 +331,14 @@ const App = (() => {
 
     if (
       state.daily &&
-      state.daily.date === todayKey()
+      state.daily.date ===
+        todayKey()
     ) {
 
       return state.daily;
 
     }
+
 
     return null;
 
@@ -245,9 +358,11 @@ const App = (() => {
 
     }
 
+
     if (
       !state.daily ||
-      state.daily.date !== todayKey()
+      state.daily.date !==
+        todayKey()
     ) {
 
       state.daily =
@@ -257,19 +372,26 @@ const App = (() => {
 
     }
 
+
     state.daily.questionIds =
       session.questionIds;
+
 
     state.daily.currentIndex =
       session.currentIndex;
 
+
     state.daily.answers =
       session.answers;
+
 
     state.daily.completed =
       session.completed;
 
-    if (session.completed) {
+
+    if (
+      session.completed
+    ) {
 
       Storage.saveDailyResult(
         state
@@ -277,7 +399,10 @@ const App = (() => {
 
     }
 
-    Storage.save(state);
+
+    Storage.save(
+      state
+    );
 
   }
 
@@ -287,17 +412,21 @@ const App = (() => {
     const existing =
       todaysDaily();
 
+
     if (
       existing &&
       existing.completed
     ) {
 
       renderHome();
+
       return;
 
     }
 
+
     let sessionData;
+
 
     if (existing) {
 
@@ -326,6 +455,7 @@ const App = (() => {
           questions,
           state.history,
           {
+
             count:
               APP_CONFIG.dailyCount,
 
@@ -333,13 +463,27 @@ const App = (() => {
               "optimized-daily",
 
             filters: {}
+
           }
         );
+
+
+      if (!ids.length) {
+
+        alert(
+          "出題できる問題がありません。"
+        );
+
+        return;
+
+      }
+
 
       state.daily =
         Storage.createDailyState(
           ids
         );
+
 
       sessionData = {
 
@@ -358,15 +502,18 @@ const App = (() => {
 
     }
 
+
     Quiz.start(
       "daily",
       sessionData.questionIds,
       sessionData
     );
 
+
     persistDailyFromSession(
       Quiz.getSession()
     );
+
 
     renderQuiz();
 
@@ -378,15 +525,18 @@ const App = (() => {
     const daily =
       todaysDaily();
 
+
     if (
       !daily ||
       !daily.completed
     ) {
 
       startDaily();
+
       return;
 
     }
+
 
     const ids =
       Selector.selectQuestionIds(
@@ -408,6 +558,7 @@ const App = (() => {
         }
       );
 
+
     if (!ids.length) {
 
       alert(
@@ -418,22 +569,28 @@ const App = (() => {
 
     }
 
+
     const oldQuestionIds =
       daily.questionIds || [];
+
 
     const oldAnswers =
       daily.answers || [];
 
+
     const newQuestionIds = [
 
       ...oldQuestionIds,
+
       ...ids
 
     ];
 
+
     state.daily = {
 
-      date: todayKey(),
+      date:
+        todayKey(),
 
       questionIds:
         newQuestionIds,
@@ -451,7 +608,11 @@ const App = (() => {
 
     };
 
-    Storage.save(state);
+
+    Storage.save(
+      state
+    );
+
 
     const sessionData = {
 
@@ -470,15 +631,18 @@ const App = (() => {
 
     };
 
+
     Quiz.start(
       "daily",
       sessionData.questionIds,
       sessionData
     );
 
+
     persistDailyFromSession(
       Quiz.getSession()
     );
+
 
     renderQuiz();
 
@@ -497,10 +661,12 @@ const App = (() => {
         state
       );
 
+
     const container =
       document.getElementById(
         "subject-stats"
       );
+
 
     container.innerHTML =
       APP_CONFIG.subjects
@@ -512,10 +678,12 @@ const App = (() => {
                 subject.id
               ];
 
+
             const total =
               item
                 ? item.total
                 : 0;
+
 
             const accuracy =
               total
@@ -527,24 +695,34 @@ const App = (() => {
                   )
                 : 0;
 
+
             return `
+
               <button
                 class="subject-card"
                 type="button"
                 data-subject="${subject.id}"
               >
-                <span class="subject-card-name">
+
+                <span
+                  class="subject-card-name"
+                >
                   ${subject.name}
                 </span>
 
-                <span class="subject-card-meta">
+
+                <span
+                  class="subject-card-meta"
+                >
                   ${
                     total
                       ? `${accuracy}% / ${total}問`
                       : "未学習"
                   }
                 </span>
+
               </button>
+
             `;
 
           }
@@ -561,22 +739,29 @@ const App = (() => {
     selectedSubject =
       subjectId;
 
+
     const subject =
       APP_CONFIG.subjects.find(
         (item) =>
           item.id === subjectId
       );
 
+
     if (!subject) {
+
       return;
+
     }
+
 
     document.getElementById(
       "subject-screen-title"
     ).textContent =
       subject.name;
 
+
     const categories = [];
+
 
     questions.forEach(
       (question) => {
@@ -590,9 +775,11 @@ const App = (() => {
 
         }
 
+
         const category =
           question.category ||
           "その他";
+
 
         if (
           categories.indexOf(
@@ -609,16 +796,19 @@ const App = (() => {
       }
     );
 
+
     const summary =
       Stats.summarize(
         questions,
         state
       );
 
+
     const container =
       document.getElementById(
         "category-list"
       );
+
 
     container.innerHTML =
       categories
@@ -628,15 +818,18 @@ const App = (() => {
             const key =
               `${subjectId}::${category}`;
 
+
             const item =
               summary.byCategory[
                 key
               ];
 
+
             const total =
               item
                 ? item.total
                 : 0;
+
 
             const accuracy =
               total
@@ -647,6 +840,7 @@ const App = (() => {
                     ) * 100
                   )
                 : 0;
+
 
             const questionCount =
               questions.filter(
@@ -659,17 +853,25 @@ const App = (() => {
                   ) === category
               ).length;
 
+
             return `
+
               <button
                 class="category-card"
                 type="button"
                 data-category="${encodeURIComponent(category)}"
               >
-                <span class="category-card-name">
+
+                <span
+                  class="category-card-name"
+                >
                   ${category}
                 </span>
 
-                <span class="category-card-meta">
+
+                <span
+                  class="category-card-meta"
+                >
                   ${
                     total
                       ? `${accuracy}% / ${total}問`
@@ -679,15 +881,21 @@ const App = (() => {
                   <br>
 
                   問題数 ${questionCount}問
+
                 </span>
+
               </button>
+
             `;
 
           }
         )
         .join("");
 
-    showScreen("subject");
+
+    showScreen(
+      "subject"
+    );
 
   }
 
@@ -703,6 +911,7 @@ const App = (() => {
     selectedCategory =
       category;
 
+
     const subject =
       APP_CONFIG.subjects.find(
         (item) =>
@@ -710,14 +919,19 @@ const App = (() => {
           selectedSubject
       );
 
+
     if (!subject) {
+
       return;
+
     }
+
 
     document.getElementById(
       "category-screen-title"
     ).textContent =
       category;
+
 
     const summary =
       Stats.summarize(
@@ -725,16 +939,20 @@ const App = (() => {
         state
       );
 
+
     const key =
       `${selectedSubject}::${category}`;
 
+
     const item =
       summary.byCategory[key];
+
 
     const total =
       item
         ? item.total
         : 0;
+
 
     const accuracy =
       total
@@ -746,24 +964,32 @@ const App = (() => {
           )
         : 0;
 
+
     const container =
       document.getElementById(
         "category-detail"
       );
 
+
     container.innerHTML = `
 
       <div class="category-summary">
 
-        <p class="category-summary-subject">
+        <p
+          class="category-summary-subject"
+        >
           ${subject.name}
         </p>
+
 
         <h2>
           ${category}
         </h2>
 
-        <p class="category-summary-stat">
+
+        <p
+          class="category-summary-stat"
+        >
           ${
             total
               ? `正答率 ${accuracy}% ／ ${total}問`
@@ -795,6 +1021,7 @@ const App = (() => {
       ${
         total
           ? `
+
             <button
               id="btn-category-weak"
               class="btn"
@@ -802,6 +1029,7 @@ const App = (() => {
             >
               弱点問題だけ
             </button>
+
           `
           : ""
       }
@@ -842,6 +1070,7 @@ const App = (() => {
         "btn-category-weak"
       );
 
+
     if (weakButton) {
 
       weakButton.addEventListener(
@@ -855,7 +1084,10 @@ const App = (() => {
 
     }
 
-    showScreen("category");
+
+    showScreen(
+      "category"
+    );
 
   }
 
@@ -875,21 +1107,28 @@ const App = (() => {
 
     };
 
+
     const strategy =
       weakOnly
         ? "weakest-first"
         : "unanswered-first";
+
 
     const ids =
       Selector.selectQuestionIds(
         questions,
         state.history,
         {
+
           count,
+
           strategy,
+
           filters
+
         }
       );
+
 
     if (!ids.length) {
 
@@ -901,11 +1140,13 @@ const App = (() => {
 
     }
 
+
     Quiz.start(
       "category",
       ids,
       null
     );
+
 
     renderQuiz();
 
@@ -923,6 +1164,7 @@ const App = (() => {
         questions,
         state
       );
+
 
     const list =
       Object.values(
@@ -943,9 +1185,13 @@ const App = (() => {
                 ) * 100
               );
 
+
             return {
+
               ...item,
+
               accuracy
+
             };
 
           }
@@ -965,6 +1211,7 @@ const App = (() => {
 
             }
 
+
             return (
               b.total -
               a.total
@@ -972,25 +1219,32 @@ const App = (() => {
 
           }
         )
-        .slice(0, 5);
+        .slice(
+          0,
+          5
+        );
+
 
     const container =
       document.getElementById(
         "weak-category-list"
       );
 
+
     if (!list.length) {
 
-      container.innerHTML =
-        `
-          <p class="note">
-            まだ十分な学習データがありません。
-          </p>
-        `;
+      container.innerHTML = `
+
+        <p class="note">
+          まだ十分な学習データがありません。
+        </p>
+
+      `;
 
       return;
 
     }
+
 
     container.innerHTML =
       list
@@ -998,6 +1252,7 @@ const App = (() => {
           (item) => {
 
             return `
+
               <button
                 class="weak-category-card"
                 type="button"
@@ -1017,11 +1272,15 @@ const App = (() => {
 
                 </span>
 
-                <span class="weak-rate">
+
+                <span
+                  class="weak-rate"
+                >
                   ${item.accuracy}%
                 </span>
 
               </button>
+
             `;
 
           }
@@ -1043,18 +1302,22 @@ const App = (() => {
         state
       );
 
+
     const daily =
       todaysDaily();
+
 
     const startButton =
       document.getElementById(
         "btn-start-daily"
       );
 
+
     const extraButton =
       document.getElementById(
         "btn-extra-daily"
       );
+
 
     const resumeNote =
       document.getElementById(
@@ -1095,14 +1358,18 @@ const App = (() => {
       startButton.textContent =
         "今日の演習を再開";
 
+
       startButton.disabled =
         false;
+
 
       extraButton.hidden =
         true;
 
+
       resumeNote.hidden =
         false;
+
 
       resumeNote.textContent =
         `${daily.answers.length}問まで回答済みです。続きから再開できます。`;
@@ -1115,20 +1382,26 @@ const App = (() => {
       startButton.textContent =
         "今日の20問は完了";
 
+
       startButton.disabled =
         true;
+
 
       extraButton.hidden =
         false;
 
+
       extraButton.textContent =
         `追加で${Number(APP_CONFIG.extraCount) || 20}問解く`;
+
 
       extraButton.disabled =
         false;
 
+
       resumeNote.hidden =
         false;
+
 
       resumeNote.textContent =
         `本日の学習は${daily.answers.length}問完了しています。さらに学習できます。`;
@@ -1138,11 +1411,14 @@ const App = (() => {
       startButton.textContent =
         "今日の20問を始める";
 
+
       startButton.disabled =
         false;
 
+
       extraButton.hidden =
         true;
+
 
       resumeNote.hidden =
         true;
@@ -1159,7 +1435,9 @@ const App = (() => {
       ).length;
 
 
-    showScreen("home");
+    showScreen(
+      "home"
+    );
 
   }
 
@@ -1173,12 +1451,15 @@ const App = (() => {
     const question =
       Quiz.currentQuestion();
 
+
     const session =
       Quiz.getSession();
+
 
     if (!question) {
 
       renderHome();
+
       return;
 
     }
@@ -1207,7 +1488,9 @@ const App = (() => {
         "quiz-choices"
       );
 
-    choices.innerHTML = "";
+
+    choices.innerHTML =
+      "";
 
 
     question.choices.forEach(
@@ -1218,20 +1501,27 @@ const App = (() => {
             "button"
           );
 
+
         button.type =
           "button";
+
 
         button.className =
           "choice";
 
+
         button.textContent =
           `${["ア", "イ", "ウ", "エ"][index]} ${label}`;
+
 
         button.addEventListener(
           "click",
           () =>
-            answerQuestion(index)
+            answerQuestion(
+              index
+            )
         );
+
 
         choices.appendChild(
           button
@@ -1243,7 +1533,10 @@ const App = (() => {
 
     renderFavoriteButton();
 
-    showScreen("quiz");
+
+    showScreen(
+      "quiz"
+    );
 
   }
 
@@ -1257,8 +1550,11 @@ const App = (() => {
         choiceIndex
       );
 
+
     if (!submitted) {
+
       return;
+
     }
 
 
@@ -1274,7 +1570,9 @@ const App = (() => {
     );
 
 
-    Storage.save(state);
+    Storage.save(
+      state
+    );
 
 
     lastResult =
@@ -1293,8 +1591,10 @@ const App = (() => {
         "btn-favorite"
       );
 
+
     const question =
       Quiz.currentQuestion();
+
 
     const on = !!(
       question &&
@@ -1304,10 +1604,12 @@ const App = (() => {
       )
     );
 
+
     button.classList.toggle(
       "on",
       on
     );
+
 
     button.setAttribute(
       "aria-pressed",
@@ -1315,6 +1617,7 @@ const App = (() => {
         ? "true"
         : "false"
     );
+
 
     button.textContent =
       on
@@ -1329,16 +1632,24 @@ const App = (() => {
     const question =
       Quiz.currentQuestion();
 
+
     if (!question) {
+
       return;
+
     }
+
 
     Storage.toggleFavorite(
       state,
       question.id
     );
 
-    Storage.save(state);
+
+    Storage.save(
+      state
+    );
+
 
     renderFavoriteButton();
 
@@ -1362,10 +1673,12 @@ const App = (() => {
         "explain-badge"
       );
 
+
     badge.textContent =
       result.isCorrect
         ? "正解"
         : "不正解";
+
 
     badge.className =
       result.isCorrect
@@ -1405,10 +1718,12 @@ const App = (() => {
         "choice-explanations-section"
       );
 
+
     const choiceContainer =
       document.getElementById(
         "choice-explanations"
       );
+
 
     const choiceExplanations =
       question.choiceExplanations;
@@ -1424,6 +1739,7 @@ const App = (() => {
       choiceSection.hidden =
         false;
 
+
       choiceContainer.innerHTML =
         question.choices
           .map(
@@ -1433,13 +1749,16 @@ const App = (() => {
                 index ===
                 question.answer;
 
+
               const explanation =
                 choiceExplanations[
                   index
                 ] ||
                 "この選択肢の詳しい解説はまだ登録されていません。";
 
+
               return `
+
                 <details
                   class="choice-explanation ${
                     isCorrect
@@ -1455,7 +1774,9 @@ const App = (() => {
 
                   <summary>
 
-                    <span class="choice-label">
+                    <span
+                      class="choice-label"
+                    >
                       ${
                         ["ア", "イ", "ウ", "エ"][
                           index
@@ -1463,11 +1784,17 @@ const App = (() => {
                       }
                     </span>
 
-                    <span class="choice-text">
+
+                    <span
+                      class="choice-text"
+                    >
                       ${choice}
                     </span>
 
-                    <span class="choice-result">
+
+                    <span
+                      class="choice-result"
+                    >
                       ${
                         isCorrect
                           ? "✓ 正解"
@@ -1477,11 +1804,15 @@ const App = (() => {
 
                   </summary>
 
-                  <div class="choice-explanation-body">
+
+                  <div
+                    class="choice-explanation-body"
+                  >
                     ${explanation}
                   </div>
 
                 </details>
+
               `;
 
             }
@@ -1492,6 +1823,7 @@ const App = (() => {
 
       choiceSection.hidden =
         true;
+
 
       choiceContainer.innerHTML =
         "";
@@ -1504,16 +1836,20 @@ const App = (() => {
         "key-point-section"
       );
 
+
     const keyPoint =
       document.getElementById(
         "key-point"
       );
 
 
-    if (question.keyPoint) {
+    if (
+      question.keyPoint
+    ) {
 
       keyPointSection.hidden =
         false;
+
 
       keyPoint.textContent =
         question.keyPoint;
@@ -1522,6 +1858,7 @@ const App = (() => {
 
       keyPointSection.hidden =
         true;
+
 
       keyPoint.textContent =
         "";
@@ -1534,10 +1871,12 @@ const App = (() => {
         "related-knowledge-section"
       );
 
+
     const relatedContainer =
       document.getElementById(
         "related-knowledge"
       );
+
 
     const relatedKnowledge =
       question.relatedKnowledge;
@@ -1553,11 +1892,15 @@ const App = (() => {
       relatedSection.hidden =
         false;
 
+
       relatedContainer.innerHTML =
         relatedKnowledge
           .map(
             (item) => `
-              <div class="related-knowledge-item">
+
+              <div
+                class="related-knowledge-item"
+              >
 
                 <h4>
                   ${item.title || ""}
@@ -1568,6 +1911,7 @@ const App = (() => {
                 </p>
 
               </div>
+
             `
           )
           .join("");
@@ -1576,6 +1920,7 @@ const App = (() => {
 
       relatedSection.hidden =
         true;
+
 
       relatedContainer.innerHTML =
         "";
@@ -1588,16 +1933,20 @@ const App = (() => {
         "mistake-point-section"
       );
 
+
     const mistakePoint =
       document.getElementById(
         "mistake-point"
       );
 
 
-    if (question.mistakePoint) {
+    if (
+      question.mistakePoint
+    ) {
 
       mistakeSection.hidden =
         false;
+
 
       mistakePoint.textContent =
         question.mistakePoint;
@@ -1606,6 +1955,7 @@ const App = (() => {
 
       mistakeSection.hidden =
         true;
+
 
       mistakePoint.textContent =
         "";
@@ -1618,6 +1968,7 @@ const App = (() => {
         "btn-next"
       );
 
+
     const session =
       Quiz.getSession();
 
@@ -1629,7 +1980,9 @@ const App = (() => {
         : "次の問題へ";
 
 
-    showScreen("explain");
+    showScreen(
+      "explain"
+    );
 
   }
 
@@ -1639,11 +1992,15 @@ const App = (() => {
     const session =
       Quiz.goNext();
 
+
     persistDailyFromSession(
       session
     );
 
-    if (session.completed) {
+
+    if (
+      session.completed
+    ) {
 
       renderResult();
 
@@ -1674,7 +2031,9 @@ const App = (() => {
       `正答率 ${summary.accuracy}%`;
 
 
-    showScreen("result");
+    showScreen(
+      "result"
+    );
 
   }
 
@@ -1697,10 +2056,12 @@ const App = (() => {
         "favorites-empty"
       );
 
+
     const quizButton =
       document.getElementById(
         "btn-favorites-quiz"
       );
+
 
     const list =
       document.getElementById(
@@ -1710,6 +2071,7 @@ const App = (() => {
 
     empty.hidden =
       ids.length > 0;
+
 
     quizButton.disabled =
       ids.length === 0;
@@ -1721,13 +2083,20 @@ const App = (() => {
           (id) => {
 
             const question =
-              questionById(id);
+              questionById(
+                id
+              );
+
 
             if (!question) {
+
               return "";
+
             }
 
+
             return `
+
               <li>
 
                 <button
@@ -1736,17 +2105,21 @@ const App = (() => {
                   data-id="${question.id}"
                 >
 
-                  <span class="fav-subject">
+                  <span
+                    class="fav-subject"
+                  >
                     ${getSubjectName(question.subject)}
                     ／
                     ${question.category || "その他"}
                   </span>
+
 
                   ${question.question}
 
                 </button>
 
               </li>
+
             `;
 
           }
@@ -1754,7 +2127,9 @@ const App = (() => {
         .join("");
 
 
-    showScreen("favorites");
+    showScreen(
+      "favorites"
+    );
 
   }
 
@@ -1770,10 +2145,13 @@ const App = (() => {
         "create-subject"
       );
 
+
     select.innerHTML = `
+
       <option value="">
         選択してください
       </option>
+
     `;
 
 
@@ -1785,11 +2163,14 @@ const App = (() => {
             "option"
           );
 
+
         option.value =
           subject.id;
 
+
         option.textContent =
           subject.name;
+
 
         select.appendChild(
           option
@@ -1806,6 +2187,7 @@ const App = (() => {
     editingQuestionId =
       null;
 
+
     populateSubjectSelect();
 
 
@@ -1814,15 +2196,18 @@ const App = (() => {
     ).value =
       "";
 
+
     document.getElementById(
       "create-category"
     ).value =
       "";
 
+
     document.getElementById(
       "create-difficulty"
     ).value =
       "2";
+
 
     document.getElementById(
       "create-question"
@@ -1840,6 +2225,7 @@ const App = (() => {
         `create-choice-${i}`
       ).value =
         "";
+
 
       document.getElementById(
         `create-choice-explanation-${i}`
@@ -1860,10 +2246,12 @@ const App = (() => {
     ).value =
       "";
 
+
     document.getElementById(
       "create-key-point"
     ).value =
       "";
+
 
     document.getElementById(
       "create-related"
@@ -1875,6 +2263,7 @@ const App = (() => {
       "create-screen-title"
     ).textContent =
       "問題を作成";
+
 
     document.getElementById(
       "create-form-heading"
@@ -1900,6 +2289,7 @@ const App = (() => {
 
     clearQuestionForm();
 
+
     showScreen(
       "createQuestion"
     );
@@ -1912,11 +2302,16 @@ const App = (() => {
   ) {
 
     const question =
-      questionById(id);
+      questionById(
+        id
+      );
+
 
     if (
       !question ||
-      !isCustomQuestion(question)
+      !isCustomQuestion(
+        question
+      )
     ) {
 
       alert(
@@ -1975,6 +2370,7 @@ const App = (() => {
           question.choices[i]
         ) || "";
 
+
       document.getElementById(
         `create-choice-explanation-${i}`
       ).value =
@@ -1990,7 +2386,11 @@ const App = (() => {
       "create-answer"
     ).value =
       String(
-        question.answer || 0
+        Number.isInteger(
+          question.answer
+        )
+          ? question.answer
+          : 0
       );
 
 
@@ -2052,7 +2452,11 @@ const App = (() => {
   }
 
 
-  function saveNewQuestion() {
+  /* =========================
+     問題入力
+     ========================= */
+
+  async function saveNewQuestion() {
 
     const subject =
       document.getElementById(
@@ -2132,7 +2536,9 @@ const App = (() => {
       ).value.trim();
 
 
-    /* 入力チェック */
+    /* =========================
+       入力チェック
+       ========================= */
 
     if (!subject) {
 
@@ -2183,7 +2589,26 @@ const App = (() => {
     }
 
 
-    /* 関連知識 */
+    if (
+      !Number.isInteger(
+        answer
+      ) ||
+      answer < 0 ||
+      answer > 3
+    ) {
+
+      alert(
+        "正解を正しく選択してください。"
+      );
+
+      return;
+
+    }
+
+
+    /* =========================
+       関連知識
+       ========================= */
 
     const relatedKnowledge =
       relatedText
@@ -2196,30 +2621,36 @@ const App = (() => {
             .filter(Boolean)
             .map(
               (line) => ({
+
                 title: "",
+
                 body: line
+
               })
             )
         : [];
 
 
-    /* 編集 */
+    /* =========================
+       編集
+       ========================= */
 
-    if (editingQuestionId) {
+    if (
+      editingQuestionId
+    ) {
 
-      const customQuestions =
-        loadCustomQuestions();
-
-
-      const index =
-        customQuestions.findIndex(
-          (question) =>
-            question.id ===
-            editingQuestionId
+      const oldQuestion =
+        questionById(
+          editingQuestionId
         );
 
 
-      if (index < 0) {
+      if (
+        !oldQuestion ||
+        !isCustomQuestion(
+          oldQuestion
+        )
+      ) {
 
         alert(
           "編集対象の問題が見つかりません。"
@@ -2228,10 +2659,6 @@ const App = (() => {
         return;
 
       }
-
-
-      const oldQuestion =
-        customQuestions[index];
 
 
       const updatedQuestion = {
@@ -2265,53 +2692,75 @@ const App = (() => {
       };
 
 
-      customQuestions[index] =
-        updatedQuestion;
+      try {
 
-
-      saveCustomQuestions(
-        customQuestions
-      );
-
-
-      const appIndex =
-        questions.findIndex(
-          (question) =>
-            question.id ===
-            editingQuestionId
+        await QuestionDB.put(
+          updatedQuestion
         );
 
 
-      if (appIndex >= 0) {
+        const appIndex =
+          questions.findIndex(
+            (question) =>
+              question.id ===
+              editingQuestionId
+          );
 
-        questions[appIndex] =
-          updatedQuestion;
+
+        if (
+          appIndex >= 0
+        ) {
+
+          questions[
+            appIndex
+          ] =
+            updatedQuestion;
+
+        }
+
+
+        alert(
+          "問題を更新しました。"
+        );
+
+
+        editingQuestionId =
+          null;
+
+
+        renderManageQuestions();
+
+      } catch (error) {
+
+        console.error(
+          "問題更新エラー",
+          error
+        );
+
+
+        alert(
+          "問題の更新に失敗しました。\n\n" +
+          error.message
+        );
 
       }
 
-
-      alert(
-        "問題を更新しました。"
-      );
-
-
-      editingQuestionId =
-        null;
-
-
-      renderManageQuestions();
 
       return;
 
     }
 
 
-    /* 新規作成 */
+    /* =========================
+       新規作成
+       ========================= */
 
     const newQuestion = {
 
       id:
-        `custom-${Date.now()}`,
+        `custom-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`,
 
       year:
         new Date().getFullYear(),
@@ -2339,39 +2788,59 @@ const App = (() => {
 
       custom: true,
 
+      sourceType:
+        "manual",
+
       createdAt:
         new Date().toISOString()
 
     };
 
 
-    const customQuestions =
-      loadCustomQuestions();
+    try {
+
+      /*
+       * IndexedDBへ保存
+       */
+
+      await QuestionDB.put(
+        newQuestion
+      );
 
 
-    customQuestions.push(
-      newQuestion
-    );
+      /*
+       * アプリ内にも追加
+       */
+
+      questions.push(
+        newQuestion
+      );
 
 
-    saveCustomQuestions(
-      customQuestions
-    );
+      alert(
+        "問題を保存しました。"
+      );
 
 
-    questions.push(
-      newQuestion
-    );
+      clearQuestionForm();
 
 
-    alert(
-      "問題を保存しました。"
-    );
+      renderHome();
+
+    } catch (error) {
+
+      console.error(
+        "問題保存エラー",
+        error
+      );
 
 
-    clearQuestionForm();
+      alert(
+        "問題の保存に失敗しました。\n\n" +
+        error.message
+      );
 
-    renderHome();
+    }
 
   }
 
@@ -2380,17 +2849,21 @@ const App = (() => {
      自作問題削除
      ========================= */
 
-  function deleteQuestion(
+  async function deleteQuestion(
     id
   ) {
 
     const question =
-      questionById(id);
+      questionById(
+        id
+      );
 
 
     if (
       !question ||
-      !isCustomQuestion(question)
+      !isCustomQuestion(
+        question
+      )
     ) {
 
       alert(
@@ -2409,71 +2882,122 @@ const App = (() => {
 
 
     if (!confirmed) {
+
       return;
-    }
-
-
-    const customQuestions =
-      loadCustomQuestions();
-
-
-    const newCustomQuestions =
-      customQuestions.filter(
-        (item) =>
-          item.id !== id
-      );
-
-
-    saveCustomQuestions(
-      newCustomQuestions
-    );
-
-
-    questions =
-      questions.filter(
-        (item) =>
-          item.id !== id
-      );
-
-
-    /* 履歴からも削除 */
-
-    if (
-      state.history &&
-      state.history[id]
-    ) {
-
-      delete state.history[id];
 
     }
 
 
-    /* お気に入りからも削除 */
+    try {
 
-    if (
-      Array.isArray(
-        state.favorites
-      )
-    ) {
+      /*
+       * IndexedDBから削除
+       */
 
-      state.favorites =
-        state.favorites.filter(
-          (favoriteId) =>
-            favoriteId !== id
+      await QuestionDB.remove(
+        id
+      );
+
+
+      /*
+       * アプリ内から削除
+       */
+
+      questions =
+        questions.filter(
+          (item) =>
+            item.id !== id
         );
 
+
+      /*
+       * 履歴からも削除
+       */
+
+      if (
+        state.history &&
+        state.history[id]
+      ) {
+
+        delete state.history[id];
+
+      }
+
+
+      /*
+       * お気に入りからも削除
+       */
+
+      if (
+        Array.isArray(
+          state.favorites
+        )
+      ) {
+
+        state.favorites =
+          state.favorites.filter(
+            (favoriteId) =>
+              favoriteId !== id
+          );
+
+      }
+
+
+      /*
+       * dailyに含まれていた場合
+       */
+
+      if (
+        state.daily &&
+        Array.isArray(
+          state.daily.questionIds
+        )
+      ) {
+
+        state.daily.questionIds =
+          state.daily.questionIds.filter(
+            (questionId) =>
+              questionId !== id
+          );
+
+      }
+
+
+      Storage.save(
+        state
+      );
+
+
+      alert(
+        "問題を削除しました。"
+      );
+
+
+      /*
+       * 編集画面から削除した場合は
+       * 管理画面へ戻す
+       */
+
+      editingQuestionId =
+        null;
+
+
+      renderManageQuestions();
+
+    } catch (error) {
+
+      console.error(
+        "問題削除エラー",
+        error
+      );
+
+
+      alert(
+        "問題の削除に失敗しました。\n\n" +
+        error.message
+      );
+
     }
-
-
-    Storage.save(state);
-
-
-    alert(
-      "問題を削除しました。"
-    );
-
-
-    renderManageQuestions();
 
   }
 
@@ -2485,7 +3009,7 @@ const App = (() => {
   function renderManageQuestions() {
 
     const customQuestions =
-      loadCustomQuestions();
+      getCustomQuestions();
 
 
     const countElement =
@@ -2518,7 +3042,9 @@ const App = (() => {
         (question) => {
 
           if (!keyword) {
+
             return true;
+
           }
 
 
@@ -2560,15 +3086,20 @@ const App = (() => {
       );
 
 
-    if (!customQuestions.length) {
+    if (
+      !customQuestions.length
+    ) {
 
       container.innerHTML = `
 
-        <div class="empty-custom-questions">
+        <div
+          class="empty-custom-questions"
+        >
 
           <p>
             自作問題はまだありません。
           </p>
+
 
           <p class="note">
             「＋ 新しい問題を作成」から
@@ -2579,9 +3110,11 @@ const App = (() => {
 
       `;
 
+
       showScreen(
         "manageQuestions"
       );
+
 
       return;
 
@@ -2592,7 +3125,9 @@ const App = (() => {
 
       container.innerHTML = `
 
-        <div class="empty-custom-questions">
+        <div
+          class="empty-custom-questions"
+        >
 
           <p>
             「${keyword}」に一致する問題はありません。
@@ -2602,9 +3137,11 @@ const App = (() => {
 
       `;
 
+
       showScreen(
         "manageQuestions"
       );
+
 
       return;
 
@@ -2632,9 +3169,11 @@ const App = (() => {
                     )}
                   </span>
 
+
                   <span>
                     ${question.category || "その他"}
                   </span>
+
 
                   <span>
                     難易度${question.difficulty || 2}
@@ -2685,6 +3224,282 @@ const App = (() => {
     showScreen(
       "manageQuestions"
     );
+
+  }
+
+
+  /* =========================
+     AI問題JSONインポート
+     ========================= */
+
+  function normalizeImportedQuestion(
+    question,
+    index
+  ) {
+
+    if (
+      !question ||
+      typeof question !==
+        "object"
+    ) {
+
+      throw new Error(
+        `${index + 1}問目のデータが不正です。`
+      );
+
+    }
+
+
+    if (
+      !question.subject
+    ) {
+
+      throw new Error(
+        `${index + 1}問目：科目がありません。`
+      );
+
+    }
+
+
+    if (
+      !question.category
+    ) {
+
+      throw new Error(
+        `${index + 1}問目：分野がありません。`
+      );
+
+    }
+
+
+    if (
+      !question.question
+    ) {
+
+      throw new Error(
+        `${index + 1}問目：問題文がありません。`
+      );
+
+    }
+
+
+    if (
+      !Array.isArray(
+        question.choices
+      ) ||
+      question.choices.length !== 4
+    ) {
+
+      throw new Error(
+        `${index + 1}問目：選択肢は4つ必要です。`
+      );
+
+    }
+
+
+    if (
+      !Number.isInteger(
+        question.answer
+      ) ||
+      question.answer < 0 ||
+      question.answer > 3
+    ) {
+
+      throw new Error(
+        `${index + 1}問目：正解番号が不正です。`
+      );
+
+    }
+
+
+    const id =
+      question.id ||
+      `ai-${Date.now()}-${index}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+
+
+    return {
+
+      ...question,
+
+      id,
+
+      custom: true,
+
+      sourceType:
+        question.sourceType ||
+        "ai",
+
+      importedAt:
+        new Date().toISOString()
+
+    };
+
+  }
+
+
+  async function importQuestionsFromFile(
+    file
+  ) {
+
+    if (!file) {
+
+      return;
+
+    }
+
+
+    try {
+
+      const text =
+        await file.text();
+
+
+      const data =
+        JSON.parse(
+          text
+        );
+
+
+      const importedQuestions =
+        Array.isArray(data)
+          ? data
+          : data.questions;
+
+
+      if (
+        !Array.isArray(
+          importedQuestions
+        )
+      ) {
+
+        throw new Error(
+          "questions配列が見つかりません。"
+        );
+
+      }
+
+
+      if (
+        !importedQuestions.length
+      ) {
+
+        throw new Error(
+          "問題が0問です。"
+        );
+
+      }
+
+
+      /*
+       * 既存IDを取得
+       */
+
+      const existingIds =
+        new Set(
+          questions.map(
+            (question) =>
+              question.id
+          )
+        );
+
+
+      /*
+       * JSONを正規化
+       */
+
+      const normalized =
+        importedQuestions.map(
+          (
+            question,
+            index
+          ) => {
+
+            const normalizedQuestion =
+              normalizeImportedQuestion(
+                question,
+                index
+              );
+
+
+            /*
+             * IDが既存の場合は
+             * 上書きする。
+             *
+             * 新規IDなら追加する。
+             */
+
+            return normalizedQuestion;
+
+          }
+        );
+
+
+      /*
+       * IndexedDBへ保存
+       */
+
+      await QuestionDB.putMany(
+        normalized
+      );
+
+
+      /*
+       * 問題一覧を再取得
+       */
+
+      questions =
+        await QuestionDB.getAll();
+
+
+      const newCount =
+        normalized.filter(
+          (question) =>
+            !existingIds.has(
+              question.id
+            )
+        ).length;
+
+
+      const updateCount =
+        normalized.length -
+        newCount;
+
+
+      alert(
+
+        `${normalized.length}問を取り込みました。\n\n` +
+
+        `新規追加：${newCount}問\n` +
+
+        `更新：${updateCount}問\n\n` +
+
+        `現在の総問題数：${questions.length}問`
+
+      );
+
+
+      renderHome();
+
+
+    } catch (error) {
+
+      console.error(
+        "AI問題のインポートに失敗しました",
+        error
+      );
+
+
+      alert(
+
+        "問題の読み込みに失敗しました。\n\n" +
+
+        error.message
+
+      );
+
+    }
 
   }
 
@@ -2762,7 +3577,9 @@ const App = (() => {
 
   function bindEvents() {
 
-    /* 今日の20問 */
+    /* =========================
+       今日の20問
+       ========================= */
 
     document.getElementById(
       "btn-start-daily"
@@ -2780,7 +3597,9 @@ const App = (() => {
     );
 
 
-    /* 復習 */
+    /* =========================
+       復習
+       ========================= */
 
     document.getElementById(
       "btn-review"
@@ -2790,7 +3609,9 @@ const App = (() => {
     );
 
 
-    /* お気に入り */
+    /* =========================
+       お気に入り
+       ========================= */
 
     document.getElementById(
       "btn-favorites"
@@ -2800,7 +3621,9 @@ const App = (() => {
     );
 
 
-    /* 問題作成 */
+    /* =========================
+       問題作成
+       ========================= */
 
     document.getElementById(
       "btn-create-question"
@@ -2810,7 +3633,9 @@ const App = (() => {
     );
 
 
-    /* 自作問題管理 */
+    /* =========================
+       自作問題管理
+       ========================= */
 
     document.getElementById(
       "btn-manage-questions"
@@ -2836,7 +3661,9 @@ const App = (() => {
     );
 
 
-    /* 自作問題検索 */
+    /* =========================
+       自作問題検索
+       ========================= */
 
     document.getElementById(
       "custom-question-search"
@@ -2846,7 +3673,9 @@ const App = (() => {
     );
 
 
-    /* 自作問題一覧の編集・削除 */
+    /* =========================
+       自作問題一覧
+       ========================= */
 
     document.getElementById(
       "custom-question-list"
@@ -2889,7 +3718,62 @@ const App = (() => {
     );
 
 
-    /* 科目 */
+    /* =========================
+       AI問題インポート
+       ========================= */
+
+    document.getElementById(
+      "btn-import-questions"
+    ).addEventListener(
+      "click",
+      () => {
+
+        document.getElementById(
+          "question-import-file"
+        ).click();
+
+      }
+    );
+
+
+    document.getElementById(
+      "question-import-file"
+    ).addEventListener(
+      "change",
+      async (event) => {
+
+        const file =
+          event.target.files &&
+          event.target.files[0];
+
+
+        if (!file) {
+
+          return;
+
+        }
+
+
+        await importQuestionsFromFile(
+          file
+        );
+
+
+        /*
+         * 同じJSONファイルを
+         * 再度選択できるようにする
+         */
+
+        event.target.value =
+          "";
+
+      }
+    );
+
+
+    /* =========================
+       科目
+       ========================= */
 
     document.getElementById(
       "subject-stats"
@@ -2902,9 +3786,13 @@ const App = (() => {
             "[data-subject]"
           );
 
+
         if (!button) {
+
           return;
+
         }
+
 
         openSubject(
           button.dataset.subject
@@ -2914,7 +3802,9 @@ const App = (() => {
     );
 
 
-    /* 分野 */
+    /* =========================
+       分野
+       ========================= */
 
     document.getElementById(
       "category-list"
@@ -2927,9 +3817,13 @@ const App = (() => {
             "[data-category]"
           );
 
+
         if (!button) {
+
           return;
+
         }
+
 
         openCategory(
           decodeURIComponent(
@@ -2941,7 +3835,9 @@ const App = (() => {
     );
 
 
-    /* 弱点分野 */
+    /* =========================
+       弱点分野
+       ========================= */
 
     document.getElementById(
       "weak-category-list"
@@ -2954,12 +3850,17 @@ const App = (() => {
             "[data-category]"
           );
 
+
         if (!button) {
+
           return;
+
         }
+
 
         selectedSubject =
           button.dataset.subject;
+
 
         openCategory(
           decodeURIComponent(
@@ -2971,7 +3872,9 @@ const App = (() => {
     );
 
 
-    /* 戻る */
+    /* =========================
+       戻る
+       ========================= */
 
     document.getElementById(
       "btn-subject-back"
@@ -3006,12 +3909,9 @@ const App = (() => {
       "click",
       () => {
 
-        if (editingQuestionId) {
+        editingQuestionId =
+          null;
 
-          editingQuestionId =
-            null;
-
-        }
 
         renderHome();
 
@@ -3019,7 +3919,9 @@ const App = (() => {
     );
 
 
-    /* お気に入り演習 */
+    /* =========================
+       お気に入り演習
+       ========================= */
 
     document.getElementById(
       "btn-favorites-quiz"
@@ -3028,10 +3930,12 @@ const App = (() => {
       () => {
 
         startFavoriteSession(
+
           Selector.selectFavoriteIds(
             questions,
             state.favorites
           )
+
         );
 
       }
@@ -3049,9 +3953,13 @@ const App = (() => {
             "[data-id]"
           );
 
+
         if (!button) {
+
           return;
+
         }
+
 
         startFavoriteSession([
           button.getAttribute(
@@ -3063,7 +3971,9 @@ const App = (() => {
     );
 
 
-    /* 問題画面お気に入り */
+    /* =========================
+       問題画面お気に入り
+       ========================= */
 
     document.getElementById(
       "btn-favorite"
@@ -3073,7 +3983,9 @@ const App = (() => {
     );
 
 
-    /* 次へ */
+    /* =========================
+       次へ
+       ========================= */
 
     document.getElementById(
       "btn-next"
@@ -3083,7 +3995,9 @@ const App = (() => {
     );
 
 
-    /* ホーム */
+    /* =========================
+       ホーム
+       ========================= */
 
     document.getElementById(
       "btn-home"
@@ -3101,6 +4015,7 @@ const App = (() => {
 
         const session =
           Quiz.getSession();
+
 
         persistDailyFromSession(
           session
@@ -3125,7 +4040,9 @@ const App = (() => {
     );
 
 
-    /* 保存 */
+    /* =========================
+       保存
+       ========================= */
 
     document.getElementById(
       "btn-save-question"
@@ -3135,7 +4052,9 @@ const App = (() => {
     );
 
 
-    /* 編集中の削除 */
+    /* =========================
+       編集中の削除
+       ========================= */
 
     document.getElementById(
       "btn-delete-editing-question"
@@ -3167,11 +4086,26 @@ const App = (() => {
 
     try {
 
+      /*
+       * IndexedDBから問題を読み込む
+       */
+
       await loadQuestions();
+
+
+      /*
+       * 旧バージョンの
+       * localStorage自作問題を移行
+       */
+
+      await migrateLegacyCustomQuestions();
+
 
     } catch (error) {
 
-      console.error(error);
+      console.error(
+        error
+      );
 
 
       const errorElement =
@@ -3193,9 +4127,17 @@ const App = (() => {
     }
 
 
+    /*
+     * 学習状態を読み込む
+     */
+
     state =
       Storage.load();
 
+
+    /*
+     * Quiz初期化
+     */
 
     Quiz.init(
       questions,
@@ -3206,7 +4148,16 @@ const App = (() => {
     );
 
 
+    /*
+     * イベント登録
+     */
+
     bindEvents();
+
+
+    /*
+     * ホーム表示
+     */
 
     renderHome();
 
