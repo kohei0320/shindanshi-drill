@@ -30,7 +30,390 @@ const App = (() => {
   const LEGACY_CUSTOM_QUESTIONS_KEY =
     "shindanshi_drill_custom_questions";
 
+        /* =========================
+     問題データ共通処理
+     ========================= */
 
+  /*
+   * 旧科目ID → 現行科目ID
+   *
+   * 以前の問題データでは
+   * A～G が使われていたため、
+   * IndexedDBに残っている古いデータも
+   * アプリ側で自動的に正規化する。
+   */
+  const SUBJECT_ID_ALIASES = Object.freeze({
+    A: "economics",
+    B: "finance",
+    C: "management",
+    D: "operations",
+    E: "legal",
+    F: "info",
+    G: "sme"
+  });
+
+
+  /*
+   * HTML/XSS対策
+   *
+   * AI生成問題の内容をinnerHTMLへ
+   * 直接入れないためのエスケープ。
+   */
+  function escapeHTML(value) {
+
+    return String(
+      value == null
+        ? ""
+        : value
+    )
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+
+  }
+
+
+  /*
+   * 科目IDを現行形式へ統一
+   */
+  function normalizeSubjectId(subjectId) {
+
+    if (
+      typeof subjectId !== "string"
+    ) {
+
+      return "";
+
+    }
+
+    const value =
+      subjectId.trim();
+
+    if (!value) {
+
+      return "";
+
+    }
+
+    return (
+      SUBJECT_ID_ALIASES[value] ||
+      value
+    );
+
+  }
+
+
+  /*
+   * 現在のAPP_CONFIGに存在する
+   * 正式な科目IDか確認
+   */
+  function isValidSubjectId(
+    subjectId
+  ) {
+
+    const normalized =
+      normalizeSubjectId(
+        subjectId
+      );
+
+    return APP_CONFIG.subjects.some(
+      (subject) =>
+        subject.id === normalized
+    );
+
+  }
+
+
+  /*
+   * 問題JSONを統一スキーマへ正規化
+   */
+  function normalizeQuestionRecord(
+    question,
+    index = 0,
+    options = {}
+  ) {
+
+    if (
+      !question ||
+      typeof question !== "object" ||
+      Array.isArray(question)
+    ) {
+
+      throw new Error(
+        `${index + 1}問目のデータが不正です。`
+      );
+
+    }
+
+
+    const subject =
+      normalizeSubjectId(
+        question.subject
+      );
+
+
+    if (
+      !subject ||
+      !isValidSubjectId(subject)
+    ) {
+
+      if (
+        options.allowInvalidSubject ===
+        true
+      ) {
+
+        return null;
+
+      }
+
+      throw new Error(
+        `${index + 1}問目：存在しない科目IDです「${question.subject}」。`
+      );
+
+    }
+
+
+    const category =
+      typeof question.category ===
+      "string"
+        ? question.category.trim()
+        : "";
+
+
+    const questionText =
+      typeof question.question ===
+      "string"
+        ? question.question.trim()
+        : "";
+
+
+    if (!category) {
+
+      throw new Error(
+        `${index + 1}問目：分野がありません。`
+      );
+
+    }
+
+
+    if (!questionText) {
+
+      throw new Error(
+        `${index + 1}問目：問題文がありません。`
+      );
+
+    }
+
+
+    if (
+      !Array.isArray(
+        question.choices
+      ) ||
+      question.choices.length !== 4
+    ) {
+
+      throw new Error(
+        `${index + 1}問目：選択肢は4つ必要です。`
+      );
+
+    }
+
+
+    const choices =
+      question.choices.map(
+        (choice) =>
+          typeof choice === "string"
+            ? choice.trim()
+            : String(
+                choice == null
+                  ? ""
+                  : choice
+              ).trim()
+      );
+
+
+    if (
+      choices.some(
+        (choice) =>
+          !choice
+      )
+    ) {
+
+      throw new Error(
+        `${index + 1}問目：4つの選択肢をすべて入力してください。`
+      );
+
+    }
+
+
+    const answer =
+      Number(
+        question.answer
+      );
+
+
+    if (
+      !Number.isInteger(answer) ||
+      answer < 0 ||
+      answer > 3
+    ) {
+
+      throw new Error(
+        `${index + 1}問目：正解番号が不正です。`
+      );
+
+    }
+
+
+    const difficulty =
+      Number(
+        question.difficulty
+      );
+
+
+    const normalizedDifficulty =
+      Number.isInteger(
+        difficulty
+      ) &&
+      difficulty >= 1 &&
+      difficulty <= 5
+        ? difficulty
+        : 2;
+
+
+    const choiceExplanations =
+      Array.isArray(
+        question.choiceExplanations
+      )
+        ? [0, 1, 2, 3].map(
+            (i) =>
+              typeof question.choiceExplanations[i] ===
+              "string"
+                ? question.choiceExplanations[i]
+                : ""
+          )
+        : ["", "", "", ""];
+
+
+    const relatedKnowledge =
+      Array.isArray(
+        question.relatedKnowledge
+      )
+        ? question.relatedKnowledge
+            .filter(
+              (item) =>
+                item &&
+                typeof item === "object"
+            )
+            .map(
+              (item) => ({
+                title:
+                  typeof item.title ===
+                  "string"
+                    ? item.title
+                    : "",
+                body:
+                  typeof item.body ===
+                  "string"
+                    ? item.body
+                    : ""
+              })
+            )
+            .filter(
+              (item) =>
+                item.title ||
+                item.body
+            )
+        : [];
+
+
+    return {
+
+      id:
+        typeof question.id === "string" &&
+        question.id.trim()
+          ? question.id.trim()
+          : `ai-${Date.now()}-${index}-${Math.random()
+              .toString(36)
+              .slice(2, 8)}`,
+
+      year:
+        Number.isInteger(
+          Number(question.year)
+        )
+          ? Number(question.year)
+          : new Date().getFullYear(),
+
+      subject,
+
+      category,
+
+      difficulty:
+        normalizedDifficulty,
+
+      question:
+        questionText,
+
+      choices,
+
+      answer,
+
+      explanation:
+        typeof question.explanation ===
+        "string"
+          ? question.explanation
+          : "",
+
+      choiceExplanations,
+
+      keyPoint:
+        typeof question.keyPoint ===
+        "string"
+          ? question.keyPoint
+          : "",
+
+      relatedKnowledge,
+
+      mistakePoint:
+        typeof question.mistakePoint ===
+        "string"
+          ? question.mistakePoint
+          : "",
+
+      custom:
+        question.custom === true,
+
+      sourceType:
+        typeof question.sourceType ===
+        "string"
+          ? question.sourceType
+          : "original",
+
+      createdAt:
+        typeof question.createdAt ===
+        "string"
+          ? question.createdAt
+          : new Date().toISOString(),
+
+      ...(question.updatedAt
+        ? {
+            updatedAt:
+              question.updatedAt
+          }
+        : {}),
+
+      ...(question.importedAt
+        ? {
+            importedAt:
+              question.importedAt
+          }
+        : {})
+
+    };
+
+  }
   /* =========================================================
      Screen
      ========================================================= */
@@ -1068,33 +1451,163 @@ const App = (() => {
      問題読み込み
      ========================================================= */
 
-  async function loadQuestions() {
+     async function loadQuestions() {
 
-    try {
-
-      questions =
-        await QuestionDB.getAll();
-
-
-      console.log(
-        `問題を${questions.length}問読み込みました`
-      );
-
-
-    } catch (error) {
-
-      console.error(
-        "問題データの読み込みに失敗しました",
-        error
-      );
-
-
-      throw error;
-
+      try {
+  
+        const storedQuestions =
+          await QuestionDB.getAll();
+  
+  
+        if (
+          !Array.isArray(
+            storedQuestions
+          )
+        ) {
+  
+          questions = [];
+  
+          return;
+  
+        }
+  
+  
+        const normalizedQuestions = [];
+  
+        const questionsToUpdate = [];
+  
+        let convertedCount = 0;
+  
+        let skippedCount = 0;
+  
+  
+        storedQuestions.forEach(
+          (
+            question,
+            index
+          ) => {
+  
+            try {
+  
+              const normalized =
+                normalizeQuestionRecord(
+                  question,
+                  index,
+                  {
+                    allowInvalidSubject:
+                      true
+                  }
+                );
+  
+  
+              /*
+               * 不正な問題は
+               * アプリの演習対象から除外
+               */
+              if (!normalized) {
+  
+                skippedCount++;
+  
+                return;
+  
+              }
+  
+  
+              normalizedQuestions.push(
+                normalized
+              );
+  
+  
+              /*
+               * A～Gなど旧形式から
+               * 変更された場合はDBも更新
+               */
+              if (
+                JSON.stringify(
+                  normalized
+                ) !==
+                JSON.stringify(
+                  question
+                )
+              ) {
+  
+                questionsToUpdate.push(
+                  normalized
+                );
+  
+                convertedCount++;
+  
+              }
+  
+            } catch (error) {
+  
+              console.warn(
+                "問題データをスキップしました",
+                question,
+                error
+              );
+  
+              skippedCount++;
+  
+            }
+  
+          }
+        );
+  
+  
+        /*
+         * 正規化された問題をIndexedDBへ保存
+         */
+        if (
+          questionsToUpdate.length
+        ) {
+  
+          await QuestionDB.putMany(
+            questionsToUpdate
+          );
+  
+        }
+  
+  
+        questions =
+          normalizedQuestions;
+  
+  
+        console.log(
+          `問題を${questions.length}問読み込みました`
+        );
+  
+  
+        if (convertedCount) {
+  
+          console.log(
+            `旧形式の問題を${convertedCount}問正規化しました`
+          );
+  
+        }
+  
+  
+        if (skippedCount) {
+  
+          console.warn(
+            `不正な問題${skippedCount}問を演習対象から除外しました`
+          );
+  
+        }
+  
+  
+      } catch (error) {
+  
+        console.error(
+          "問題データの読み込みに失敗しました",
+          error
+        );
+  
+        throw error;
+  
+      }
+  
     }
-
-  }
-
 
   /* =========================================================
      今日の問題
@@ -4127,290 +4640,145 @@ const App = (() => {
      AI問題JSONインポート
      ========================================================= */
 
-  async function importQuestionsFromFile(
-    file
-  ) {
-
-    if (!file) {
-
-      return;
-
-    }
-
-
-    try {
-
-      /*
-       * ファイル形式チェック
-       */
-
-      if (
-        file.type &&
-        file.type !==
-          "application/json" &&
-        !file.name.toLowerCase().endsWith(
-          ".json"
-        )
-      ) {
-
-        throw new Error(
-          "JSONファイルを選択してください。"
-        );
-
+     async function importQuestionsFromFile(
+      file
+    ) {
+  
+      if (!file) {
+  
+        return;
+  
       }
-
-
-      const text =
-        await file.text();
-
-
-      if (
-        !text.trim()
-      ) {
-
-        throw new Error(
-          "JSONファイルが空です。"
-        );
-
-      }
-
-
-      let data;
-
-
+  
+  
       try {
-
-        data =
+  
+        const text =
+          await file.text();
+  
+  
+        const data =
           JSON.parse(
             text
           );
-
-      } catch (parseError) {
-
-        throw new Error(
-          "JSONの形式が正しくありません。"
-        );
-
-      }
-
-
-      /*
-       * 以下の2形式を許可
-       *
-       * [
-       *   {...},
-       *   {...}
-       * ]
-       *
-       * または
-       *
-       * {
-       *   "questions": [
-       *     {...}
-       *   ]
-       * }
-       */
-
-      const importedQuestions =
-        Array.isArray(data)
-          ? data
-          : data &&
-            Array.isArray(
-              data.questions
-            )
-            ? data.questions
-            : null;
-
-
-      if (
-        !Array.isArray(
-          importedQuestions
-        )
-      ) {
-
-        throw new Error(
-          "questions配列が見つかりません。"
-        );
-
-      }
-
-
-      if (
-        !importedQuestions.length
-      ) {
-
-        throw new Error(
-          "問題が0問です。"
-        );
-
-      }
-
-
-      /*
-       * 一度に大量投入しすぎることを
-       * 防ぐ。
-       */
-
-      const MAX_IMPORT_QUESTIONS =
-        1000;
-
-
-      if (
-        importedQuestions.length >
-        MAX_IMPORT_QUESTIONS
-      ) {
-
-        throw new Error(
-          `一度に取り込める問題は${MAX_IMPORT_QUESTIONS}問までです。`
-        );
-
-      }
-
-
-      /*
-       * 既存ID
-       */
-
-      const existingIds =
-        new Set(
-          questions.map(
-            (question) =>
-              question.id
+  
+  
+        const importedQuestions =
+          Array.isArray(data)
+            ? data
+            : data.questions;
+  
+  
+        if (
+          !Array.isArray(
+            importedQuestions
           )
-        );
-
-
-      /*
-       * JSONを正規化
-       *
-       * ここで全問題を検証する。
-       *
-       * 1問でも不正なら
-       * 全体を保存しない。
-       */
-
-      const normalized =
-        importedQuestions.map(
-          (
-            question,
-            index
-          ) =>
-            normalizeImportedQuestion(
+        ) {
+  
+          throw new Error(
+            "questions配列が見つかりません。"
+          );
+  
+        }
+  
+  
+        if (
+          !importedQuestions.length
+        ) {
+  
+          throw new Error(
+            "問題が0問です。"
+          );
+  
+        }
+  
+  
+        /*
+         * JSONを正規化
+         *
+         * A～Gが来ても
+         * 正式IDへ変換する
+         */
+        const normalized =
+          importedQuestions.map(
+            (
               question,
               index
-            )
-        );
-
-
-      /*
-       * ID重複もチェック
-       *
-       * 同じJSON内に同一IDが複数ある場合は
-       * 意図しない上書きを防止する。
-       */
-
-      const importIds =
-        new Set();
-
-
-      normalized.forEach(
-        (
-          question,
-          index
-        ) => {
-
-          if (
-            importIds.has(
-              question.id
-            )
-          ) {
-
-            throw new Error(
-              `${index + 1}問目：ID「${question.id}」がJSON内で重複しています。`
-            );
-
-          }
-
-
-          importIds.add(
-            question.id
+            ) =>
+              normalizeImportedQuestion(
+                question,
+                index
+              )
           );
-
-        }
-      );
-
-
-      /*
-       * IndexedDBへ保存
-       *
-       * putなので
-       * 既存ID → 更新
-       * 新規ID → 追加
-       */
-
-      await QuestionDB.putMany(
-        normalized
-      );
-
-
-      /*
-       * 問題一覧を再取得
-       */
-
-      questions =
-        await QuestionDB.getAll();
-
-
-      const newCount =
-        normalized.filter(
-          (question) =>
-            !existingIds.has(
-              question.id
+  
+  
+        /*
+         * 既存IDを取得
+         */
+        const existingIds =
+          new Set(
+            questions.map(
+              (question) =>
+                question.id
             )
-        ).length;
-
-
-      const updateCount =
-        normalized.length -
-        newCount;
-
-
-      alert(
-
-        `${normalized.length}問を取り込みました。\n\n` +
-
-        `新規追加：${newCount}問\n` +
-
-        `更新：${updateCount}問\n\n` +
-
-        `現在の総問題数：${questions.length}問`
-
-      );
-
-
-      renderHome();
-
-
-    } catch (error) {
-
-      console.error(
-        "AI問題のインポートに失敗しました",
-        error
-      );
-
-
-      alert(
-
-        "問題の読み込みに失敗しました。\n\n" +
-
-        error.message
-
-      );
-
+          );
+  
+  
+        /*
+         * IndexedDBへ保存
+         */
+        await QuestionDB.putMany(
+          normalized
+        );
+  
+  
+        /*
+         * DBから再読み込み
+         */
+        await loadQuestions();
+  
+  
+        const newCount =
+          normalized.filter(
+            (question) =>
+              !existingIds.has(
+                question.id
+              )
+          ).length;
+  
+  
+        const updateCount =
+          normalized.length -
+          newCount;
+  
+  
+        alert(
+          `${normalized.length}問を取り込みました。\n\n` +
+          `新規追加：${newCount}問\n` +
+          `更新：${updateCount}問\n\n` +
+          `現在の総問題数：${questions.length}問`
+        );
+  
+  
+        renderHome();
+  
+  
+      } catch (error) {
+  
+        console.error(
+          "AI問題のインポートに失敗しました",
+          error
+        );
+  
+  
+        alert(
+          "問題の読み込みに失敗しました。\n\n" +
+          error.message
+        );
+  
+      }
+  
     }
-
-  }
-
 
   /* =========================================================
      復習
@@ -4418,34 +4786,41 @@ const App = (() => {
 
   function startReview() {
 
-    const ids =
-      Selector.selectReviewIds(
-        questions,
-        state.history
+    let ids = [];
+
+    try {
+
+      ids =
+        Selector.selectQuestionIds(
+          questions,
+          state.history,
+          {
+            count:
+              APP_CONFIG.dailyCount,
+
+            strategy:
+              "optimized-daily",
+
+            filters: {}
+          }
+        );
+
+    } catch (error) {
+
+      console.error(
+        "今日の問題の選択に失敗しました",
+        error
       );
 
 
-    if (!ids.length) {
-
       alert(
-        "復習できる間違えた問題はまだありません。"
+        "今日の問題を作成できませんでした。\n\n" +
+        error.message
       );
 
       return;
 
     }
-
-
-    Quiz.start(
-      "review",
-      ids,
-      null
-    );
-
-
-    renderQuiz();
-
-  }
 
 
   /* =========================================================
