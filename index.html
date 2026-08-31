@@ -834,7 +834,6 @@
   >
 
     <div class="quiz-top">
-
       <button
         id="btn-manage-back"
         class="text-btn"
@@ -848,62 +847,68 @@
       </p>
 
       <span></span>
-
     </div>
 
-
     <div class="manage-header">
-
-      <h2 class="section-title">
-        自作問題
-      </h2>
+      <div>
+        <h2 class="section-title">
+          自作問題
+        </h2>
+        <p class="manage-subtitle">
+          科目 → 分野の順に整理しています
+        </p>
+      </div>
 
       <p
         id="custom-question-count"
-        class="note"
+        class="manage-count"
       >
         0問
       </p>
-
     </div>
 
+    <div class="manage-tools">
+      <button
+        id="btn-import-questions"
+        class="btn import-btn"
+        type="button"
+      >
+        🤖 AI問題を一括インポート
+      </button>
+
+      <button
+        id="btn-create-from-manage"
+        class="btn primary"
+        type="button"
+      >
+        ＋ 新しい問題を作成
+      </button>
+    </div>
+
+    <input
+      id="question-import-file"
+      type="file"
+      accept=".json,application/json"
+      hidden
+    />
 
     <input
       id="custom-question-search"
       class="search-input"
       type="search"
-      placeholder="問題文・分野・科目を検索"
+      placeholder="問題文・分野・科目・解説を検索"
+      autocomplete="off"
     />
 
-
-    <button
-      id="btn-create-from-manage"
-      class="btn primary"
-      type="button"
-    >
-      ＋ 新しい問題を作成
-    </button>
-
+    <p class="manage-hint">
+      科目・分野をタップして開閉できます。問題の「編集」から内容を変更できます。
+    </p>
 
     <div
       id="custom-question-list"
       class="custom-question-list"
     ></div>
-    <input
-    id="question-import-file"
-    type="file"
-    accept=".json,application/json"
-    hidden
-  />
-  
-  <button
-    id="btn-import-questions"
-    class="btn"
-    type="button"
-  >
-    AI問題を一括インポート
-  </button>
-  
+
   </section>
 
 
