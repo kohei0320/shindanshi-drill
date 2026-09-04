@@ -1,74 +1,50 @@
+```javascript
 /*
- * 診断士Drill - QuestionDB
- * JSONスキーマをここで統一し、IndexedDBへの入出力を一元化します。
+ * question-db.js
  *
- * 正規化後の基本形:
- * {
- *   schemaVersion: 1,
- *   id: string,
- *   year: number|null,
- *   subject: string,
- *   category: string,
- *   difficulty: 1|2|3,
- *   question: string,
- *   choices: [string,string,string,string],
- *   answer: 0|1|2|3,
- *   explanation: string,
- *   choiceExplanations: [string,string,string,string],
- *   keyPoint: string,
- *   relatedKnowledge: [{title:string, body:string}],
- *   mistakePoint: string,
- *   custom: boolean,
- *   sourceType: "official"|"ai"|"manual"|"unknown",
- *   createdAt: string|null,
- *   updatedAt: string|null,
- *   importedAt: string|null
- * }
+ * 自作問題・AI問題をIndexedDBで管理する。
+ *
+ * 公開API：
+ * QuestionDB.getAll()
+ * QuestionDB.get(id)
+ * QuestionDB.put(question)
+ * QuestionDB.putMany(questions)
+ * QuestionDB.remove(id)
+ * QuestionDB.exists(id)
+ * QuestionDB.normalizeQuestion(question)
  */
 
 const QuestionDB = (() => {
+
+  "use strict";
+
+  /* =========================
+     設定
+     ========================= */
+
   const DB_NAME = "shindanshi-drill-db";
-  const DB_VERSION = 2;
+  const DB_VERSION = 1;
   const STORE_NAME = "questions";
-  const SCHEMA_VERSION = 1;
 
-  const SOURCE_TYPES = new Set([
-    "official",
-    "ai",
-    "manual",
-    "unknown"
-  ]);
 
-  function asString(value, fallback = "") {
-    return typeof value === "string" ? value : fallback;
-  }
-
-  function asNullableString(value) {
-    return typeof value === "string" ? value : null;
-  }
-
-  function asDifficulty(value) {
-    const n = Number(value);
-    return [1, 2, 3].includes(n) ? n : 2;
-  }
-
-  function asIndex(value) {
-    const n = Number(value);
-    return Number.isInteger(n) && n >= 0 && n <= 3 ? n : 0;
-  }
-
-  function asFourStrings(value) {
-    const source = Array.isArray(value) ? value : [];
-    return [0, 1, 2, 3].map(i => asString(source[i]));
-  }
+  /* =========================
+     関連知識の正規化
+     ========================= */
 
   function normalizeRelatedKnowledge(value) {
-    if (!Array.isArray(value)) return [];
+
+    if (!Array.isArray(value)) {
+      return [];
+    }
 
     return value
       .map(item => {
+
         if (typeof item === "string") {
-          return { title: "", body: item };
+          return {
+            title: "",
+            body: item.trim()
+          };
         }
 
         if (!item || typeof item !== "object") {
@@ -76,208 +52,726 @@ const QuestionDB = (() => {
         }
 
         return {
-          title: asString(item.title),
-          body: asString(item.body)
+          title: String(item.title ?? "").trim(),
+          body: String(item.body ?? "").trim()
         };
+
       })
-      .filter(item => item && item.body);
+      .filter(item => item && (item.title || item.body));
   }
 
-  function normalizeQuestion(input, options = {}) {
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
-      throw new Error("問題データはJSONオブジェクトである必要があります。");
-    }
 
-    const id = asString(input.id).trim();
-    const question = asString(input.question).trim();
-    const choices = asFourStrings(input.choices);
-    const subject = asString(input.subject).trim();
-    const category = asString(input.category).trim();
+  /* =========================
+     問題データ正規化
+     ========================= */
 
-    if (!id) throw new Error("idがありません。");
-    if (!subject) throw new Error(`subjectがありません: ${id}`);
-    if (!question) throw new Error(`questionがありません: ${id}`);
-    if (choices.some(choice => !choice.trim())) {
-      throw new Error(`choicesは4つすべて必要です: ${id}`);
-    }
+  function normalizeQuestion(source) {
 
-    const rawYear = Number(input.year);
-    const year = Number.isInteger(rawYear) && rawYear >= 1900 && rawYear <= 2100
-      ? rawYear
-      : null;
+    const question = source || {};
+    const now = new Date().toISOString();
 
-    const sourceType = SOURCE_TYPES.has(input.sourceType)
-      ? input.sourceType
-      : (input.custom ? "ai" : "unknown");
+    const id = String(
+      question.id ||
+      `custom-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`
+    );
 
-    return {
-      schemaVersion: SCHEMA_VERSION,
+    const normalized = {
+
       id,
-      year,
-      subject,
-      category,
-      difficulty: asDifficulty(input.difficulty),
-      question,
-      choices,
-      answer: asIndex(input.answer),
-      explanation: asString(input.explanation),
-      choiceExplanations: asFourStrings(input.choiceExplanations),
-      keyPoint: asString(input.keyPoint),
-      relatedKnowledge: normalizeRelatedKnowledge(input.relatedKnowledge),
-      mistakePoint: asString(input.mistakePoint),
-      custom: Boolean(input.custom),
-      sourceType,
-      createdAt: asNullableString(input.createdAt),
-      updatedAt: asNullableString(input.updatedAt),
-      importedAt: asNullableString(input.importedAt)
+
+      year:
+        Number.isInteger(Number(question.year))
+          ? Number(question.year)
+          : new Date().getFullYear(),
+
+      subject:
+        String(question.subject ?? "").trim(),
+
+      category:
+        String(question.category || "その他").trim(),
+
+      difficulty:
+        Number.isInteger(Number(question.difficulty))
+          ? Math.min(
+              3,
+              Math.max(
+                1,
+                Number(question.difficulty)
+              )
+            )
+          : 2,
+
+      question:
+        String(question.question ?? "").trim(),
+
+      choices:
+        Array.isArray(question.choices)
+          ? [0, 1, 2, 3].map(index =>
+              String(
+                question.choices[index] ?? ""
+              ).trim()
+            )
+          : ["", "", "", ""],
+
+      answer:
+        Number.isInteger(Number(question.answer))
+          ? Math.min(
+              3,
+              Math.max(
+                0,
+                Number(question.answer)
+              )
+            )
+          : 0,
+
+      explanation:
+        String(question.explanation ?? "").trim(),
+
+      choiceExplanations:
+        Array.isArray(question.choiceExplanations)
+          ? [0, 1, 2, 3].map(index =>
+              String(
+                question.choiceExplanations[index] ?? ""
+              ).trim()
+            )
+          : ["", "", "", ""],
+
+      keyPoint:
+        String(question.keyPoint ?? "").trim(),
+
+      relatedKnowledge:
+        normalizeRelatedKnowledge(
+          question.relatedKnowledge
+        ),
+
+      mistakePoint:
+        String(question.mistakePoint ?? "").trim(),
+
+      custom:
+        question.custom === true,
+
+      sourceType:
+        String(
+          question.sourceType || "manual"
+        ),
+
+      createdAt:
+        question.createdAt || now,
+
+      updatedAt:
+        question.updatedAt || now
+
     };
+
+
+    if (question.importedAt) {
+      normalized.importedAt =
+        question.importedAt;
+    }
+
+
+    return normalized;
   }
 
-  function open() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-      request.onupgradeneeded = event => {
-        const db = event.target.result;
+  /* =========================
+     問題チェック
+     ========================= */
 
-        let store;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
-        } else {
-          store = event.target.transaction.objectStore(STORE_NAME);
-        }
+  function validateQuestion(question) {
 
-        if (!store.indexNames.contains("subject")) {
-          store.createIndex("subject", "subject", { unique: false });
-        }
-        if (!store.indexNames.contains("category")) {
-          store.createIndex("category", "category", { unique: false });
-        }
-        if (!store.indexNames.contains("custom")) {
-          store.createIndex("custom", "custom", { unique: false });
-        }
-        if (!store.indexNames.contains("sourceType")) {
-          store.createIndex("sourceType", "sourceType", { unique: false });
-        }
-      };
+    if (
+      !question ||
+      typeof question !== "object"
+    ) {
+      throw new Error(
+        "問題データが不正です。"
+      );
+    }
 
-      request.onsuccess = () => {
-        const db = request.result;
+    if (
+      !question.id ||
+      typeof question.id !== "string"
+    ) {
+      throw new Error(
+        "問題IDがありません。"
+      );
+    }
 
-        db.onversionchange = () => {
-          db.close();
-        };
+    if (
+      !question.subject
+    ) {
+      throw new Error(
+        "科目がありません。"
+      );
+    }
 
-        resolve(db);
-      };
+    if (
+      !question.question
+    ) {
+      throw new Error(
+        "問題文がありません。"
+      );
+    }
 
-      request.onerror = () => reject(request.error);
-    });
+    if (
+      !Array.isArray(question.choices) ||
+      question.choices.length !== 4
+    ) {
+      throw new Error(
+        "選択肢は4つ必要です。"
+      );
+    }
+
+    if (
+      !Number.isInteger(question.answer) ||
+      question.answer < 0 ||
+      question.answer > 3
+    ) {
+      throw new Error(
+        "正解番号が不正です。"
+      );
+    }
+
   }
+
+
+  /* =========================
+     DBを開く
+     ========================= */
+
+  function openDB() {
+
+    return new Promise(
+      (resolve, reject) => {
+
+        const request =
+          indexedDB.open(
+            DB_NAME,
+            DB_VERSION
+          );
+
+
+        request.onupgradeneeded =
+          event => {
+
+            const db =
+              event.target.result;
+
+            if (
+              !db.objectStoreNames.contains(
+                STORE_NAME
+              )
+            ) {
+
+              db.createObjectStore(
+                STORE_NAME,
+                {
+                  keyPath: "id"
+                }
+              );
+
+            }
+
+          };
+
+
+        request.onsuccess =
+          () => {
+
+            resolve(
+              request.result
+            );
+
+          };
+
+
+        request.onerror =
+          () => {
+
+            reject(
+              request.error ||
+              new Error(
+                "IndexedDBを開けませんでした。"
+              )
+            );
+
+          };
+
+
+        request.onblocked =
+          () => {
+
+            reject(
+              new Error(
+                "IndexedDBの更新がブロックされています。"
+              )
+            );
+
+          };
+
+      }
+    );
+
+  }
+
+
+  /* =========================
+     全問題取得
+     ========================= */
 
   async function getAll() {
-    const db = await open();
 
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, "readonly");
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.getAll();
+    const db =
+      await openDB();
 
-      request.onsuccess = () => {
-        const result = [];
+    return new Promise(
+      (resolve, reject) => {
 
-        for (const item of request.result || []) {
-          try {
-            result.push(normalizeQuestion(item));
-          } catch (error) {
-            console.warn("不正な問題データをスキップしました:", error, item);
-          }
-        }
+        const transaction =
+          db.transaction(
+            STORE_NAME,
+            "readonly"
+          );
 
-        resolve(result);
-      };
+        const store =
+          transaction.objectStore(
+            STORE_NAME
+          );
 
-      request.onerror = () => reject(request.error);
-    });
+        const request =
+          store.getAll();
+
+
+        request.onsuccess =
+          () => {
+
+            const result =
+              Array.isArray(request.result)
+                ? request.result
+                : [];
+
+            resolve(
+              result.map(normalizeQuestion)
+            );
+
+          };
+
+
+        request.onerror =
+          () => {
+
+            reject(
+              request.error ||
+              new Error(
+                "問題データの取得に失敗しました。"
+              )
+            );
+
+          };
+
+
+        transaction.oncomplete =
+          () => db.close();
+
+        transaction.onerror =
+          () => db.close();
+
+      }
+    );
+
   }
 
-  async function put(question) {
-    const normalized = normalizeQuestion(question);
-    const db = await open();
 
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, "readwrite");
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.put(normalized);
+  /* =========================
+     ID指定取得
+     ========================= */
 
-      request.onsuccess = () => resolve(normalized);
-      request.onerror = () => reject(request.error);
-    });
-  }
+  async function get(id) {
 
-  async function putMany(questions) {
-    if (!Array.isArray(questions) || !questions.length) {
-      throw new Error("取り込む問題がありません。");
+    if (!id) {
+      return null;
     }
 
-    const normalized = questions.map((question, index) => {
-      try {
-        return normalizeQuestion(question);
-      } catch (error) {
-        throw new Error(`問題${index + 1}: ${error.message}`);
+    const db =
+      await openDB();
+
+    return new Promise(
+      (resolve, reject) => {
+
+        const transaction =
+          db.transaction(
+            STORE_NAME,
+            "readonly"
+          );
+
+        const store =
+          transaction.objectStore(
+            STORE_NAME
+          );
+
+        const request =
+          store.get(id);
+
+
+        request.onsuccess =
+          () => {
+
+            resolve(
+              request.result
+                ? normalizeQuestion(
+                    request.result
+                  )
+                : null
+            );
+
+          };
+
+
+        request.onerror =
+          () => {
+
+            reject(
+              request.error ||
+              new Error(
+                "問題データの取得に失敗しました。"
+              )
+            );
+
+          };
+
+
+        transaction.oncomplete =
+          () => db.close();
+
+        transaction.onerror =
+          () => db.close();
+
       }
-    });
+    );
 
-    const db = await open();
-
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, "readwrite");
-      const store = transaction.objectStore(STORE_NAME);
-
-      normalized.forEach(question => store.put(question));
-
-      transaction.oncomplete = () => resolve(normalized.length);
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(
-        transaction.error || new Error("IndexedDBへの保存が中断されました。")
-      );
-    });
   }
+
+
+  /* =========================
+     1問保存
+     ========================= */
+
+  async function put(question) {
+
+    const normalized =
+      normalizeQuestion(question);
+
+    validateQuestion(
+      normalized
+    );
+
+
+    const db =
+      await openDB();
+
+    return new Promise(
+      (resolve, reject) => {
+
+        const transaction =
+          db.transaction(
+            STORE_NAME,
+            "readwrite"
+          );
+
+        const store =
+          transaction.objectStore(
+            STORE_NAME
+          );
+
+
+        store.put(
+          normalized
+        );
+
+
+        transaction.oncomplete =
+          () => {
+
+            db.close();
+
+            resolve(
+              normalized
+            );
+
+          };
+
+
+        transaction.onerror =
+          () => {
+
+            db.close();
+
+            reject(
+              transaction.error ||
+              new Error(
+                "問題の保存に失敗しました。"
+              )
+            );
+
+          };
+
+
+        transaction.onabort =
+          () => {
+
+            db.close();
+
+            reject(
+              transaction.error ||
+              new Error(
+                "問題の保存が中断されました。"
+              )
+            );
+
+          };
+
+      }
+    );
+
+  }
+
+
+  /* =========================
+     複数問題保存
+     ========================= */
+
+  async function putMany(questions) {
+
+    if (!Array.isArray(questions)) {
+
+      throw new Error(
+        "questionsは配列である必要があります。"
+      );
+
+    }
+
+
+    if (!questions.length) {
+      return [];
+    }
+
+
+    const normalized =
+      questions.map(
+        question => {
+
+          const item =
+            normalizeQuestion(
+              question
+            );
+
+          validateQuestion(
+            item
+          );
+
+          return item;
+
+        }
+      );
+
+
+    const db =
+      await openDB();
+
+
+    return new Promise(
+      (resolve, reject) => {
+
+        const transaction =
+          db.transaction(
+            STORE_NAME,
+            "readwrite"
+          );
+
+        const store =
+          transaction.objectStore(
+            STORE_NAME
+          );
+
+
+        normalized.forEach(
+          question => {
+
+            store.put(
+              question
+            );
+
+          }
+        );
+
+
+        transaction.oncomplete =
+          () => {
+
+            db.close();
+
+            resolve(
+              normalized
+            );
+
+          };
+
+
+        transaction.onerror =
+          () => {
+
+            db.close();
+
+            reject(
+              transaction.error ||
+              new Error(
+                "問題データの一括保存に失敗しました。"
+              )
+            );
+
+          };
+
+
+        transaction.onabort =
+          () => {
+
+            db.close();
+
+            reject(
+              transaction.error ||
+              new Error(
+                "問題データの一括保存が中断されました。"
+              )
+            );
+
+          };
+
+      }
+    );
+
+  }
+
+
+  /* =========================
+     問題削除
+     ========================= */
 
   async function remove(id) {
-    const db = await open();
 
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, "readwrite");
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.delete(id);
+    if (!id) {
 
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+      throw new Error(
+        "削除する問題IDがありません。"
+      );
+
+    }
+
+
+    const db =
+      await openDB();
+
+
+    return new Promise(
+      (resolve, reject) => {
+
+        const transaction =
+          db.transaction(
+            STORE_NAME,
+            "readwrite"
+          );
+
+        const store =
+          transaction.objectStore(
+            STORE_NAME
+          );
+
+
+        store.delete(id);
+
+
+        transaction.oncomplete =
+          () => {
+
+            db.close();
+
+            resolve(true);
+
+          };
+
+
+        transaction.onerror =
+          () => {
+
+            db.close();
+
+            reject(
+              transaction.error ||
+              new Error(
+                "問題の削除に失敗しました。"
+              )
+            );
+
+          };
+
+
+        transaction.onabort =
+          () => {
+
+            db.close();
+
+            reject(
+              transaction.error ||
+              new Error(
+                "問題の削除が中断されました。"
+              )
+            );
+
+          };
+
+      }
+    );
+
   }
 
-  async function clear() {
-    const db = await open();
 
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, "readwrite");
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.clear();
+  /* =========================
+     存在確認
+     ========================= */
 
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+  async function exists(id) {
+
+    const question =
+      await get(id);
+
+    return !!question;
+
   }
+
+
+  /* =========================
+     公開API
+     ========================= */
 
   return {
-    open,
+
     getAll,
+
+    get,
+
     put,
+
     putMany,
+
     remove,
-    clear,
-    normalizeQuestion,
-    SCHEMA_VERSION
+
+    exists,
+
+    normalizeQuestion
+
   };
+
 })();
+```
