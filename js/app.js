@@ -1150,7 +1150,7 @@ const App = (() => {
                     <button
                       type="button"
                       class="btn small-btn edit-custom-question"
-                      data-id="${safeAttribute(question.id)}"
+                      data-id="${escapeHtml(question.id)}"
                     >
                       編集
                     </button>
