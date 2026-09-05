@@ -1130,7 +1130,7 @@ const App = (() => {
         .map(([category, items]) => `
           <details class="custom-category-group" open>
             <summary class="custom-category-summary">
-              <span class="custom-category-name">${escapeHTML(category)}</span>
+              <span class="custom-category-name">${escapeHtml(category)}</span>
               <span class="custom-category-count">${items.length}問</span>
             </summary>
 
@@ -1138,12 +1138,12 @@ const App = (() => {
               ${items.map(question => `
                 <article class="custom-question-card">
                   <div class="custom-question-meta">
-                    <span>難易度${escapeHTML(question.difficulty || 2)}</span>
-                    ${question.year ? `<span>${escapeHTML(question.year)}年</span>` : ""}
+                    <span>難易度${escapeHtml(question.difficulty || 2)}</span>
+                    ${question.year ? `<span>${escapeHtml(question.year)}年</span>` : ""}
                   </div>
 
                   <h3 class="custom-question-title">
-                    ${escapeHTML(question.question)}
+                    ${escapeHtml(question.question)}
                   </h3>
 
                   <div class="custom-question-actions">
@@ -1173,7 +1173,7 @@ const App = (() => {
         <details class="custom-subject-group" open>
           <summary class="custom-subject-summary">
             <span>
-              <strong>${escapeHTML(getSubjectName(subjectId))}</strong>
+              <strong>${escapeHtml(getSubjectName(subjectId))}</strong>
               <small>${subjectTotal}問</small>
             </span>
             <span class="custom-subject-chevron">⌄</span>
