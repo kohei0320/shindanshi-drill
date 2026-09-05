@@ -1477,14 +1477,18 @@ const App = (() => {
     try {
       await loadQuestions();
     } catch (error) {
-      console.error(error);
+  console.error("起動エラー:", error);
 
-      const errorElement = document.getElementById("boot-error");
-      errorElement.hidden = false;
-      errorElement.textContent =
-        "問題データを読み込めませんでした。ローカルサーバー経由で開いてください。";
-      return;
-    }
+  const errorElement =
+    document.getElementById("boot-error");
+
+  errorElement.hidden = false;
+
+  errorElement.textContent =
+    `起動エラー: ${error?.message || error}`;
+
+  return;
+}
 
     state = Storage.load();
 
