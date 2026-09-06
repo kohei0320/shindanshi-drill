@@ -33,7 +33,22 @@ const App = (() => {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
   }
+function isCustomQuestion(question) {
+  if (!question || typeof question !== "object") {
+    return false;
+  }
 
+  return (
+    question.custom === true ||
+    question.sourceType === "custom" ||
+    question.sourceType === "manual" ||
+    question.sourceType === "ai"
+  );
+}
+
+function safeAttribute(value) {
+  return escapeHtml(value);
+}
   function todayKey() {
     if (typeof Storage.todayKey === "function") {
       return Storage.todayKey();
