@@ -33,22 +33,7 @@ const App = (() => {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
   }
-function isCustomQuestion(question) {
-  if (!question || typeof question !== "object") {
-    return false;
-  }
 
-  return (
-    question.custom === true ||
-    question.sourceType === "custom" ||
-    question.sourceType === "manual" ||
-    question.sourceType === "ai"
-  );
-}
-
-function safeAttribute(value) {
-  return escapeHtml(value);
-}
   function todayKey() {
     if (typeof Storage.todayKey === "function") {
       return Storage.todayKey();
@@ -112,9 +97,13 @@ function safeAttribute(value) {
     );
   }
 
- function getCustomQuestions() {
-  return questions.filter(question => isCustomQuestion(question));
-}
+  function isCustomQuestion(question) {
+    return !!(question && question.custom === true);
+  }
+
+  function getCustomQuestions() {
+    return questions.filter(question => isCustomQuestion(question));
+  }
 
   function questionById(id) {
     return questions.find(question => question.id === id);
@@ -1173,7 +1162,7 @@ function safeAttribute(value) {
                     <button
                       type="button"
                       class="btn small-btn danger delete-custom-question"
-                      data-id="${safeAttribute(question.id)}"
+                      data-id="${escapeHtml(question.id)}"
                     >
                       削除
                     </button>
@@ -1492,18 +1481,14 @@ function safeAttribute(value) {
     try {
       await loadQuestions();
     } catch (error) {
-  console.error("起動エラー:", error);
+      console.error(error);
 
-  const errorElement =
-    document.getElementById("boot-error");
-
-  errorElement.hidden = false;
-
-  errorElement.textContent =
-    `起動エラー: ${error?.message || error}`;
-
-  return;
-}
+      const errorElement = document.getElementById("boot-error");
+      errorElement.hidden = false;
+      errorElement.textContent =
+        "問題データを読み込めませんでした。ローカルサーバー経由で開いてください。";
+      return;
+    }
 
     state = Storage.load();
 
