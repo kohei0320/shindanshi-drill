@@ -1,11 +1,10 @@
-const App = (() => {
+const App = (() => {const App = (() => {
   let questions = [];
   let state = Storage.emptyState();
   let lastResult = null;
   let selectedSubject = null;
   let selectedCategory = null;
   let editingQuestionId = null;
-  let returnToManageQuestions = false;
 
   const CUSTOM_QUESTIONS_KEY = "shindanshi_drill_custom_questions";
 
@@ -99,10 +98,6 @@ const App = (() => {
 
   function isCustomQuestion(question) {
     return !!(question && question.custom === true);
-  }
-
-  function getCustomQuestions() {
-    return questions.filter(question => isCustomQuestion(question));
   }
 
   function questionById(id) {
@@ -480,8 +475,19 @@ const App = (() => {
     const extraButton = document.getElementById("btn-extra-daily");
     const resumeNote = document.getElementById("resume-note");
 
+    /*
+     * 今日の学習はStatsではなく、当日のdailyセッション自体を正本として表示。
+     * これにより20/20→40/40→60/60と追加学習にも対応し、0/0問題を防ぐ。
+     */
+    const todayAnswered = daily && Array.isArray(daily.answers)
+      ? daily.answers.length
+      : 0;
+    const todayTotal = daily && Array.isArray(daily.questionIds)
+      ? daily.questionIds.length
+      : 0;
+
     document.getElementById("stat-today").textContent =
-      daily ? `${summary.todayAnswered} / ${summary.todayTotal}問` : "未開始";
+      `${todayAnswered} / ${todayTotal}問`;
 
     document.getElementById("stat-accuracy").textContent =
       `${summary.accuracy}%`;
@@ -812,11 +818,8 @@ const App = (() => {
     document.getElementById("btn-delete-editing-question").hidden = true;
   }
 
-  function openCreateQuestion(fromManage = false) {
-    returnToManageQuestions = !!fromManage;
+  function openCreateQuestion() {
     clearQuestionForm();
-    document.getElementById("btn-create-question-back").textContent =
-      returnToManageQuestions ? "自作問題管理へ" : "ホーム";
     showScreen("createQuestion");
   }
 
@@ -861,8 +864,6 @@ const App = (() => {
     document.getElementById("btn-save-question").textContent = "変更を保存";
     document.getElementById("btn-delete-editing-question").hidden = false;
 
-    document.getElementById("btn-create-question-back").textContent = "自作問題管理へ";
-    returnToManageQuestions = true;
     showScreen("createQuestion");
   }
 
@@ -968,18 +969,11 @@ const App = (() => {
       customQuestions.push(newQuestion);
       saveCustomQuestions(customQuestions);
 
-      const wasEditing = !!editingQuestionId;
-      alert(wasEditing ? "問題を更新しました。" : "問題を保存しました。");
+      alert(editingQuestionId ? "問題を更新しました。" : "問題を保存しました。");
 
       editingQuestionId = null;
       clearQuestionForm();
-
-      if (returnToManageQuestions) {
-        returnToManageQuestions = false;
-        renderManageQuestions();
-      } else {
-        renderHome();
-      }
+      renderHome();
     } catch (error) {
       console.error("問題の保存に失敗しました", error);
       alert(`問題の保存に失敗しました。\n\n${error.message}`);
@@ -1059,10 +1053,7 @@ const App = (() => {
         subjectName,
         question.explanation,
         question.keyPoint
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+      ].filter(Boolean).join(" ").toLowerCase();
 
       return text.includes(keyword);
     });
@@ -1090,11 +1081,7 @@ const App = (() => {
       return;
     }
 
-    /*
-     * 科目 → 分野 → 問題 の3階層で整理。
-     * 問題数が増えても目的の問題へ到達しやすいよう、
-     * 科目・分野をdetailsで折りたためる構成にする。
-     */
+    /* 科目 → 分野 → 問題。初期状態はすべて折りたたむ。 */
     const subjectGroups = new Map();
 
     filtered.forEach(question => {
@@ -1119,7 +1106,7 @@ const App = (() => {
       .sort((a, b) => {
         const ai = subjectOrder.indexOf(a[0]);
         const bi = subjectOrder.indexOf(b[0]);
-        if (ai === -1 && bi === -1) return a[0].localeCompare(b[0]);
+        if (ai === -1 && bi === -1) return a[0].localeCompare(b[0], "ja");
         if (ai === -1) return 1;
         if (bi === -1) return -1;
         return ai - bi;
@@ -1132,7 +1119,7 @@ const App = (() => {
       const categoryHtml = Array.from(categoryGroups.entries())
         .sort((a, b) => a[0].localeCompare(b[0], "ja"))
         .map(([category, items]) => `
-          <details class="custom-category-group" open>
+          <details class="custom-category-group">
             <summary class="custom-category-summary">
               <span class="custom-category-name">${escapeHtml(category)}</span>
               <span class="custom-category-count">${items.length}問</span>
@@ -1151,19 +1138,10 @@ const App = (() => {
                   </h3>
 
                   <div class="custom-question-actions">
-                    <button
-                      type="button"
-                      class="btn small-btn edit-custom-question"
-                      data-id="${escapeHtml(question.id)}"
-                    >
+                    <button type="button" class="btn small-btn edit-custom-question" data-id="${escapeHtml(question.id)}">
                       編集
                     </button>
-
-                    <button
-                      type="button"
-                      class="btn small-btn danger delete-custom-question"
-                      data-id="${escapeHtml(question.id)}"
-                    >
+                    <button type="button" class="btn small-btn danger delete-custom-question" data-id="${escapeHtml(question.id)}">
                       削除
                     </button>
                   </div>
@@ -1174,7 +1152,7 @@ const App = (() => {
         `).join("");
 
       return `
-        <details class="custom-subject-group" open>
+        <details class="custom-subject-group">
           <summary class="custom-subject-summary">
             <span>
               <strong>${escapeHtml(getSubjectName(subjectId))}</strong>
@@ -1182,7 +1160,6 @@ const App = (() => {
             </span>
             <span class="custom-subject-chevron">⌄</span>
           </summary>
-
           <div class="custom-subject-categories">
             ${categoryHtml}
           </div>
@@ -1191,6 +1168,66 @@ const App = (() => {
     }).join("");
 
     showScreen("manageQuestions");
+  }
+
+  /* =========================
+     自作問題を全クリア
+     ========================= */
+
+  async function clearAllCustomQuestions() {
+    const customQuestions = getCustomQuestions();
+
+    if (!customQuestions.length) {
+      alert("削除する自作問題はありません。");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `自作問題をすべて削除しますか？\n\n${customQuestions.length}問が削除されます。\nこの操作は元に戻せません。`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      for (const question of customQuestions) {
+        await QuestionDB.remove(question.id);
+      }
+
+      localStorage.removeItem(CUSTOM_QUESTIONS_KEY);
+
+      const customIds = new Set(customQuestions.map(question => question.id));
+      questions = questions.filter(question => !customIds.has(question.id));
+
+      if (state.history) {
+        customQuestions.forEach(question => {
+          delete state.history[question.id];
+        });
+      }
+
+      if (Array.isArray(state.favorites)) {
+        state.favorites = state.favorites.filter(id => !customIds.has(id));
+      }
+
+      if (state.daily && Array.isArray(state.daily.questionIds)) {
+        state.daily.questionIds = state.daily.questionIds.filter(id => !customIds.has(id));
+        state.daily.answers = Array.isArray(state.daily.answers)
+          ? state.daily.answers.filter(answer => {
+              const id = answer?.questionId || answer?.id;
+              return !customIds.has(id);
+            })
+          : [];
+        state.daily.currentIndex = state.daily.answers.length;
+      }
+
+      Storage.save(state);
+      editingQuestionId = null;
+
+      alert(`${customQuestions.length}問の自作問題を削除しました。`);
+      renderManageQuestions();
+    } catch (error) {
+      console.error("自作問題の全削除に失敗しました", error);
+      alert(`自作問題の全削除に失敗しました。\n\n${error.message}`);
+    }
   }
 
   /* =========================
@@ -1342,7 +1379,12 @@ const App = (() => {
       .addEventListener("click", renderHome);
 
     document.getElementById("btn-create-from-manage")
-      .addEventListener("click", () => openCreateQuestion(true));
+      .addEventListener("click", openCreateQuestion);
+
+    const clearAllButton = document.getElementById("btn-clear-all-custom-questions");
+    if (clearAllButton) {
+      clearAllButton.addEventListener("click", clearAllCustomQuestions);
+    }
 
     document.getElementById("custom-question-search")
       .addEventListener("input", renderManageQuestions);
@@ -1400,14 +1442,8 @@ const App = (() => {
 
     document.getElementById("btn-create-question-back")
       .addEventListener("click", () => {
-        const goManage = returnToManageQuestions;
         editingQuestionId = null;
-        returnToManageQuestions = false;
-        if (goManage) {
-          renderManageQuestions();
-        } else {
-          renderHome();
-        }
+        renderHome();
       });
 
     document.getElementById("btn-favorites-quiz")
