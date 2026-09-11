@@ -1,138 +1,86 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
 
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1, viewport-fit=cover"
-  />
+  >
 
   <meta
     name="apple-mobile-web-app-capable"
     content="yes"
-  />
+  >
 
   <meta
     name="apple-mobile-web-app-status-bar-style"
     content="default"
-  />
+  >
 
   <meta
     name="apple-mobile-web-app-title"
     content="診断士Drill"
-  />
+  >
 
   <meta
     name="theme-color"
-    content="#1f4b99"
-  />
+    content="#2457c5"
+  >
 
   <title>診断士Drill</title>
 
-  <link
-    rel="manifest"
-    href="manifest.json"
-  />
-
-  <link
-    rel="apple-touch-icon"
-    href="icons/icon.svg"
-  />
-
-  <link
-    rel="stylesheet"
-    href="css/style.css"
-  />
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
 
 <main class="app">
 
-  <!-- =========================
-       エラー
-       ========================= -->
-
-  <p
-    id="boot-error"
-    class="error"
-    hidden
-  ></p>
+  <!-- エラー -->
+  <p id="boot-error" class="error" hidden></p>
 
 
   <!-- =========================
        HOME
        ========================= -->
 
-  <section
-    id="screen-home"
-    class="screen"
-  >
+  <section id="screen-home" class="screen">
 
     <header class="header">
-      <p class="eyebrow">
-        中小企業診断士 1次試験
-      </p>
-
-      <h1>
-        診断士Drill
-      </h1>
+      <p class="eyebrow">中小企業診断士 1次試験</p>
+      <h1>診断士Drill</h1>
     </header>
 
+
+    <!-- 学習状況 -->
 
     <div class="cards">
 
       <article class="card">
-        <p class="label">
-          今日の学習
-        </p>
-
-        <p
-          id="stat-today"
-          class="value"
-        >
-          -
-        </p>
+        <p class="label">今日の学習</p>
+        <p id="stat-today" class="value">0 / 0問</p>
       </article>
 
-
       <article class="card">
-        <p class="label">
-          累計正答率
-        </p>
-
-        <p
-          id="stat-accuracy"
-          class="value"
-        >
-          -
-        </p>
+        <p class="label">累計正答率</p>
+        <p id="stat-accuracy" class="value">-</p>
       </article>
 
-
       <article class="card">
-        <p class="label">
-          累計回答数
-        </p>
-
-        <p
-          id="stat-total"
-          class="value"
-        >
-          -
-        </p>
+        <p class="label">累計回答数</p>
+        <p id="stat-total" class="value">0問</p>
       </article>
 
     </div>
 
 
-    <p
-      id="resume-note"
-      class="note"
-      hidden
-    ></p>
+    <p id="resume-note" class="note" hidden></p>
 
+
+    <!-- 今日の学習 -->
 
     <button
       id="btn-start-daily"
@@ -141,7 +89,6 @@
     >
       今日の20問を始める
     </button>
-
 
     <button
       id="btn-extra-daily"
@@ -153,66 +100,95 @@
     </button>
 
 
-    <button
-      id="btn-review"
-      class="btn"
-      type="button"
-    >
-      間違えた問題を復習
-    </button>
+    <!-- 復習・お気に入り -->
 
+    <div class="home-action-group">
 
-    <button
-      id="btn-favorites"
-      class="btn"
-      type="button"
-    >
-      お気に入り
-    </button>
+      <button
+        id="btn-review"
+        class="btn"
+        type="button"
+      >
+        間違えた問題を復習
+      </button>
+
+      <button
+        id="btn-favorites"
+        class="btn"
+        type="button"
+      >
+        お気に入り
+      </button>
+
+    </div>
 
 
     <!-- 自作問題 -->
 
-    <button
-      id="btn-create-question"
-      class="btn"
-      type="button"
-    >
-      ＋ 問題を作成
-    </button>
+    <div class="home-section">
 
+      <div class="section-heading-row">
+        <div>
+          <p class="section-kicker">CUSTOM QUESTIONS</p>
+          <h2 class="section-title">自作問題</h2>
+        </div>
+      </div>
 
-    <button
-      id="btn-manage-questions"
-      class="btn"
-      type="button"
-    >
-      📝 自作問題を管理
-    </button>
+      <button
+        id="btn-create-question"
+        class="btn"
+        type="button"
+      >
+        ＋ 問題を作成
+      </button>
+
+      <button
+        id="btn-manage-questions"
+        class="btn"
+        type="button"
+      >
+        📝 自作問題を管理
+      </button>
+
+    </div>
 
 
     <!-- 科目別 -->
 
-    <h2 class="section-title">
-      科目別学習状況
-    </h2>
+    <div class="home-section">
 
-    <div
-      id="subject-stats"
-      class="subject-stat-cards"
-    ></div>
+      <div class="section-heading-row">
+        <div>
+          <p class="section-kicker">STUDY PROGRESS</p>
+          <h2 class="section-title">科目別学習状況</h2>
+        </div>
+      </div>
+
+      <div
+        id="subject-stats"
+        class="subject-stat-cards"
+      ></div>
+
+    </div>
 
 
     <!-- 弱点分野 -->
 
-    <h2 class="section-title">
-      弱点分野
-    </h2>
+    <div class="home-section">
 
-    <div
-      id="weak-category-list"
-      class="weak-category-list"
-    ></div>
+      <div class="section-heading-row">
+        <div>
+          <p class="section-kicker">WEAK POINTS</p>
+          <h2 class="section-title">弱点分野</h2>
+        </div>
+      </div>
+
+      <div
+        id="weak-category-list"
+        class="weak-category-list"
+      ></div>
+
+    </div>
 
   </section>
 
@@ -248,11 +224,11 @@
 
     </div>
 
-
-    <h2 class="section-title">
-      分野を選択
-    </h2>
-
+    <div class="page-heading">
+      <p class="section-kicker">SUBJECT</p>
+      <h2>分野を選択</h2>
+      <p>学習したい分野を選択してください。</p>
+    </div>
 
     <div
       id="category-list"
@@ -293,7 +269,6 @@
 
     </div>
 
-
     <div
       id="category-detail"
       class="category-detail"
@@ -322,14 +297,16 @@
         ホーム
       </button>
 
-      <p class="progress">
-        お気に入り
-      </p>
+      <p class="progress">お気に入り</p>
 
       <span></span>
 
     </div>
 
+    <div class="page-heading">
+      <p class="section-kicker">FAVORITES</p>
+      <h2>お気に入り</h2>
+    </div>
 
     <button
       id="btn-favorites-quiz"
@@ -339,7 +316,6 @@
       お気に入りを演習
     </button>
 
-
     <p
       id="favorites-empty"
       class="note"
@@ -347,7 +323,6 @@
       お気に入りはまだありません。
       問題画面の☆から登録できます。
     </p>
-
 
     <ul
       id="favorites-list"
@@ -396,23 +371,24 @@
 
     </div>
 
+    <div class="quiz-card">
 
-    <p
-      id="quiz-meta"
-      class="meta"
-    ></p>
+      <p
+        id="quiz-meta"
+        class="meta"
+      ></p>
 
+      <h2
+        id="quiz-question"
+        class="question"
+      ></h2>
 
-    <h2
-      id="quiz-question"
-      class="question"
-    ></h2>
+      <div
+        id="quiz-choices"
+        class="choices"
+      ></div>
 
-
-    <div
-      id="quiz-choices"
-      class="choices"
-    ></div>
+    </div>
 
   </section>
 
@@ -432,20 +408,16 @@
       class="badge"
     ></p>
 
-
     <p
       id="explain-question"
       class="question small"
     ></p>
-
 
     <p
       id="explain-answer"
       class="answer"
     ></p>
 
-
-    <!-- 正答解説 -->
 
     <div class="explain-section">
 
@@ -460,8 +432,6 @@
 
     </div>
 
-
-    <!-- 選択肢別解説 -->
 
     <div
       id="choice-explanations-section"
@@ -481,26 +451,18 @@
     </div>
 
 
-    <!-- この問題の核心 -->
-
     <div
       id="key-point-section"
       class="key-point"
       hidden
     >
 
-      <h3>
-        🎯 この問題の核心
-      </h3>
+      <h3>🎯 この問題の核心</h3>
 
-      <p
-        id="key-point"
-      ></p>
+      <p id="key-point"></p>
 
     </div>
 
-
-    <!-- 関連知識 -->
 
     <div
       id="related-knowledge-section"
@@ -520,21 +482,15 @@
     </div>
 
 
-    <!-- 間違いやすいポイント -->
-
     <div
       id="mistake-point-section"
       class="mistake-point"
       hidden
     >
 
-      <h3>
-        ⚠️ 間違いやすいポイント
-      </h3>
+      <h3>⚠️ 間違いやすいポイント</h3>
 
-      <p
-        id="mistake-point"
-      ></p>
+      <p id="mistake-point"></p>
 
     </div>
 
@@ -582,23 +538,25 @@
     </div>
 
 
-    <h2 class="section-title">
-      <span id="create-form-heading">
+    <div class="page-heading">
+      <p class="section-kicker">CUSTOM QUESTION</p>
+
+      <h2 id="create-form-heading">
         新しい問題
-      </span>
-    </h2>
+      </h2>
+
+      <p>
+        自分専用の問題を登録できます。
+      </p>
+    </div>
 
 
     <div class="form-group">
 
-      <label for="create-subject">
-        科目
-      </label>
+      <label for="create-subject">科目</label>
 
       <select id="create-subject">
-        <option value="">
-          選択してください
-        </option>
+        <option value="">選択してください</option>
       </select>
 
     </div>
@@ -606,35 +564,26 @@
 
     <div class="form-group">
 
-      <label for="create-category">
-        分野
-      </label>
+      <label for="create-category">分野</label>
 
       <input
         id="create-category"
         type="text"
-        placeholder="例：GDP"
-      />
+        placeholder="例：生産計画、店舗管理、GDP"
+      >
 
     </div>
 
 
     <div class="form-group">
 
-      <label for="create-difficulty">
-        難易度
-      </label>
+      <label for="create-difficulty">難易度</label>
 
       <select id="create-difficulty">
 
-        <option value="1">
-          1 - 基礎
-        </option>
+        <option value="1">1 - 基礎</option>
 
-        <option
-          value="2"
-          selected
-        >
+        <option value="2" selected>
           2 - 標準
         </option>
 
@@ -664,33 +613,12 @@
 
     <div class="form-group">
 
-      <label>
-        選択肢
-      </label>
+      <label>選択肢</label>
 
-      <input
-        id="create-choice-0"
-        type="text"
-        placeholder="ア"
-      />
-
-      <input
-        id="create-choice-1"
-        type="text"
-        placeholder="イ"
-      />
-
-      <input
-        id="create-choice-2"
-        type="text"
-        placeholder="ウ"
-      />
-
-      <input
-        id="create-choice-3"
-        type="text"
-        placeholder="エ"
-      />
+      <input id="create-choice-0" type="text" placeholder="ア">
+      <input id="create-choice-1" type="text" placeholder="イ">
+      <input id="create-choice-2" type="text" placeholder="ウ">
+      <input id="create-choice-3" type="text" placeholder="エ">
 
     </div>
 
@@ -703,21 +631,10 @@
 
       <select id="create-answer">
 
-        <option value="0">
-          ア
-        </option>
-
-        <option value="1">
-          イ
-        </option>
-
-        <option value="2">
-          ウ
-        </option>
-
-        <option value="3">
-          エ
-        </option>
+        <option value="0">ア</option>
+        <option value="1">イ</option>
+        <option value="2">ウ</option>
+        <option value="3">エ</option>
 
       </select>
 
@@ -741,33 +658,12 @@
 
     <div class="form-group">
 
-      <label>
-        選択肢別解説
-      </label>
+      <label>選択肢別解説</label>
 
-      <textarea
-        id="create-choice-explanation-0"
-        rows="3"
-        placeholder="アの解説"
-      ></textarea>
-
-      <textarea
-        id="create-choice-explanation-1"
-        rows="3"
-        placeholder="イの解説"
-      ></textarea>
-
-      <textarea
-        id="create-choice-explanation-2"
-        rows="3"
-        placeholder="ウの解説"
-      ></textarea>
-
-      <textarea
-        id="create-choice-explanation-3"
-        rows="3"
-        placeholder="エの解説"
-      ></textarea>
+      <textarea id="create-choice-explanation-0" rows="3" placeholder="アの解説"></textarea>
+      <textarea id="create-choice-explanation-1" rows="3" placeholder="イの解説"></textarea>
+      <textarea id="create-choice-explanation-2" rows="3" placeholder="ウの解説"></textarea>
+      <textarea id="create-choice-explanation-3" rows="3" placeholder="エの解説"></textarea>
 
     </div>
 
@@ -824,7 +720,7 @@
 
 
   <!-- =========================
-       自作問題管理
+       MANAGE QUESTIONS
        ========================= -->
 
   <section
@@ -834,6 +730,7 @@
   >
 
     <div class="quiz-top">
+
       <button
         id="btn-manage-back"
         class="text-btn"
@@ -847,67 +744,115 @@
       </p>
 
       <span></span>
+
     </div>
 
-    <div class="manage-header">
+
+    <div class="page-heading manage-page-heading">
+
+      <p class="section-kicker">
+        QUESTION LIBRARY
+      </p>
+
+      <h2>自作問題</h2>
+
+      <p>
+        科目・分野ごとに整理して管理できます。
+      </p>
+
+    </div>
+
+
+    <div class="manage-summary">
+
       <div>
-        <h2 class="section-title">
-          自作問題
-        </h2>
-        <p class="manage-subtitle">
-          科目 → 分野の順に整理しています
-        </p>
+        <span class="summary-label">
+          登録問題
+        </span>
+
+        <strong
+          id="custom-question-count"
+        >
+          0問
+        </strong>
       </div>
 
-      <p
-        id="custom-question-count"
-        class="manage-count"
-      >
-        0問
-      </p>
     </div>
 
-    <div class="manage-tools">
+
+    <!-- AIインポートを上部へ -->
+
+    <div class="import-card">
+
+      <div class="import-card-text">
+
+        <span class="import-label">
+          AI IMPORT
+        </span>
+
+        <strong>
+          AI問題を一括追加
+        </strong>
+
+        <small>
+          JSONファイルから複数問題をまとめて登録
+        </small>
+
+      </div>
+
       <button
         id="btn-import-questions"
-        class="btn import-btn"
+        class="import-button"
         type="button"
       >
-        🤖 AI問題を一括インポート
+        インポート
       </button>
 
-      <button
-        id="btn-create-from-manage"
-        class="btn primary"
-        type="button"
-      >
-        ＋ 新しい問題を作成
-      </button>
     </div>
+
 
     <input
       id="question-import-file"
       type="file"
       accept=".json,application/json"
       hidden
-    />
+    >
 
-    <input
-      id="custom-question-search"
-      class="search-input"
-      type="search"
-      placeholder="問題文・分野・科目・解説を検索"
-      autocomplete="off"
-    />
 
-    <p class="manage-hint">
-      科目・分野をタップして開閉できます。問題の「編集」から内容を変更できます。
-    </p>
+    <button
+      id="btn-create-from-manage"
+      class="btn primary"
+      type="button"
+    >
+      ＋ 新しい問題を作成
+    </button>
+
+
+    <div class="manage-tools">
+
+      <input
+        id="custom-question-search"
+        class="search-input"
+        type="search"
+        placeholder="問題文・分野・科目を検索"
+      >
+
+    </div>
+
 
     <div
       id="custom-question-list"
       class="custom-question-list"
     ></div>
+
+
+    <button
+      id="btn-clear-all-custom-questions"
+      class="btn danger"
+      type="button"
+    >
+      🗑 自作問題をすべてクリア
+    </button>
 
   </section>
 
@@ -922,22 +867,27 @@
     hidden
   >
 
+    <div class="result-icon">
+      ✓
+    </div>
+
+    <p class="section-kicker">
+      SESSION COMPLETE
+    </p>
+
     <h2>
       今回の結果
     </h2>
-
 
     <p
       id="result-score"
       class="value large"
     ></p>
 
-
     <p
       id="result-accuracy"
       class="note"
     ></p>
-
 
     <button
       id="btn-home"
