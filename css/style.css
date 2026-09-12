@@ -116,6 +116,16 @@ button {
   outline-offset: 2px;
 }
 
+/*
+ * hidden属性は必ず最優先で非表示にする。
+ * これがないと .modal-overlay 等のdisplay指定と詳細度が衝突し、
+ * 透明なオーバーレイが画面全体を覆ってクリックを妨げることがある。
+ */
+[hidden] {
+  display: none !important;
+}
+
+
 
 /* =========================================================
    App shell
