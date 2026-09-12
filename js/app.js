@@ -278,13 +278,19 @@ const App = (() => {
     return !!(question && question.custom === true);
   }
 
-function getCustomQuestions() {
-return questions.filter(question => isCustomQuestion(question));
-   }
-
-function questionById(id) {
-return questions.find(question => question.id === id);
- }
+277|   function isCustomQuestion(question) {
+278|     return !!(question && question.custom === true);
+279|   }
+280| 
+281|   function getCustomQuestions() {
+282|     return questions.filter(question => isCustomQuestion(question));
+283|   }
+284| 
+285|   function questionById(id) {
+286|     return questions.find(question => question.id === id);
+287|   }
+288| 
+289|   /* =========================
 
   /* =========================
      問題読み込み
