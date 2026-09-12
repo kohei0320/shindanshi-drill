@@ -1164,7 +1164,7 @@ const App = (() => {
     /*
      * ここが重要。
      *
-     * 20問すべて回答した時点で
+     * 設定された問題数すべてに回答した時点で
      * Quiz側のcompletedがまだfalseでも
      * Dailyを完了扱いにする。
      */
@@ -2199,7 +2199,9 @@ const App = (() => {
       daily.completed
     ) {
       startButton.textContent =
-        "今日の20問は完了";
+        `今日の${
+          Number(APP_CONFIG.dailyCount) || 20
+        }問は完了`;
 
       startButton.disabled =
         true;
@@ -2229,7 +2231,9 @@ const App = (() => {
      */
     else {
       startButton.textContent =
-        "今日の20問を始める";
+        `今日の${
+          Number(APP_CONFIG.dailyCount) || 20
+        }問を始める`;
 
       startButton.disabled =
         false;
