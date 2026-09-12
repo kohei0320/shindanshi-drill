@@ -147,6 +147,69 @@
     </div>
 
 
+    <!-- 間隔反復（SRS） -->
+
+    <div class="home-section">
+
+      <div class="section-heading-row">
+        <div>
+          <p class="section-kicker">SPACED REPETITION</p>
+          <h2 class="section-title">今日の復習（間隔反復）</h2>
+        </div>
+      </div>
+
+      <div class="srs-card">
+        <div class="srs-card-text">
+          <span id="srs-due-count" class="srs-due-count">0問</span>
+          <small>復習のタイミングが来た問題です</small>
+        </div>
+
+        <button
+          id="btn-srs-review"
+          class="btn primary small-btn"
+          type="button"
+        >
+          復習する
+        </button>
+      </div>
+
+    </div>
+
+
+    <!-- 学習ツール -->
+
+    <div class="home-section">
+
+      <div class="section-heading-row">
+        <div>
+          <p class="section-kicker">STUDY TOOLS</p>
+          <h2 class="section-title">学習ツール</h2>
+        </div>
+      </div>
+
+      <div class="home-action-group">
+
+        <button
+          id="btn-notes-list"
+          class="btn"
+          type="button"
+        >
+          ✍️ マイノート一覧
+        </button>
+
+        <button
+          id="btn-flashcards"
+          class="btn"
+          type="button"
+        >
+          📚 用語集フラッシュカード
+        </button>
+
+      </div>
+
+    </div>
+
+
     <!-- 自作問題 -->
 
     <div class="home-section">
@@ -207,10 +270,36 @@
         </div>
       </div>
 
+      <button
+        id="btn-weak-drill"
+        class="btn primary"
+        type="button"
+      >
+        🎯 弱点だけで20問
+      </button>
+
       <div
         id="weak-category-list"
         class="weak-category-list"
       ></div>
+
+    </div>
+
+
+    <!-- 学習の記録（ヒートマップ） -->
+
+    <div class="home-section">
+
+      <div class="section-heading-row">
+        <div>
+          <p class="section-kicker">STUDY HEATMAP</p>
+          <h2 class="section-title">学習の記録</h2>
+        </div>
+      </div>
+
+      <div class="heatmap-scroll">
+        <div id="study-heatmap" class="heatmap-grid"></div>
+      </div>
 
     </div>
 
@@ -358,6 +447,142 @@
 
 
   <!-- =========================
+       NOTES
+       ========================= -->
+
+  <section
+    id="screen-notes"
+    class="screen"
+    hidden
+  >
+
+    <div class="quiz-top">
+
+      <button
+        id="btn-notes-back"
+        class="text-btn"
+        type="button"
+      >
+        ホーム
+      </button>
+
+      <p class="progress">マイノート</p>
+
+      <span></span>
+
+    </div>
+
+    <div class="page-heading">
+      <p class="section-kicker">MY NOTES</p>
+      <h2>マイノート一覧</h2>
+      <p>解説画面で書いた「自分の言葉での説明」の一覧です。タップすると解き直せます。</p>
+    </div>
+
+    <p
+      id="notes-empty"
+      class="note"
+    >
+      マイノートはまだありません。
+      解説画面の「自分の言葉で説明してみる」から書き込めます。
+    </p>
+
+    <ul
+      id="notes-list"
+      class="favorite-list"
+    ></ul>
+
+  </section>
+
+
+  <!-- =========================
+       FLASHCARDS
+       ========================= -->
+
+  <section
+    id="screen-flashcards"
+    class="screen"
+    hidden
+  >
+
+    <div class="quiz-top">
+
+      <button
+        id="btn-flashcards-back"
+        class="text-btn"
+        type="button"
+      >
+        ホーム
+      </button>
+
+      <p
+        id="flashcard-progress"
+        class="progress"
+      >
+        1 / 1
+      </p>
+
+      <span></span>
+
+    </div>
+
+    <div class="page-heading">
+      <p class="section-kicker">GLOSSARY FLASHCARDS</p>
+      <h2>用語集フラッシュカード</h2>
+      <p>問題の「関連知識」から作られた用語カードです。タップで裏面を表示します。</p>
+    </div>
+
+    <div class="flashcard-stage">
+      <button
+        id="flashcard"
+        class="flashcard"
+        type="button"
+      >
+        <div class="flashcard-inner">
+
+          <div class="flashcard-face flashcard-front">
+            <p id="flashcard-front-text"></p>
+          </div>
+
+          <div class="flashcard-face flashcard-back">
+            <p id="flashcard-back-text"></p>
+          </div>
+
+        </div>
+      </button>
+    </div>
+
+    <div class="flashcard-controls">
+
+      <button
+        id="btn-flashcard-prev"
+        class="btn"
+        type="button"
+      >
+        ← 前へ
+      </button>
+
+      <button
+        id="btn-flashcard-shuffle"
+        class="btn"
+        type="button"
+      >
+        🔀 シャッフル
+      </button>
+
+      <button
+        id="btn-flashcard-next"
+        class="btn primary"
+        type="button"
+      >
+        次へ →
+      </button>
+
+    </div>
+
+  </section>
+
+
+  <!-- =========================
        QUIZ
        ========================= -->
 
@@ -448,6 +673,41 @@
     ></p>
 
 
+    <div id="confidence-group" class="confidence-group">
+      <p class="confidence-label">
+        この問題への自信は？（復習間隔に反映されます）
+      </p>
+
+      <div class="confidence-buttons">
+
+        <button
+          type="button"
+          class="confidence-btn"
+          data-level="guess"
+        >
+          🎲 勘
+        </button>
+
+        <button
+          type="button"
+          class="confidence-btn"
+          data-level="normal"
+        >
+          🤔 普通
+        </button>
+
+        <button
+          type="button"
+          class="confidence-btn"
+          data-level="confident"
+        >
+          💪 自信あり
+        </button>
+
+      </div>
+    </div>
+
+
     <div class="explain-section">
 
       <h3 class="explain-title">
@@ -459,6 +719,20 @@
         class="explanation"
       ></p>
 
+    </div>
+
+
+    <div class="explain-section">
+
+      <h3 class="explain-title">
+        ✍️ 自分の言葉で説明してみる（マイノート）
+      </h3>
+
+      <textarea
+        id="explain-note"
+        rows="4"
+        placeholder="なぜこの答えになるのか、自分の言葉でまとめてみましょう"
+      ></textarea>
     </div>
 
 
@@ -817,6 +1091,56 @@
       </div>
 
     </div>
+
+
+    <!-- 学習データのバックアップ -->
+
+    <div class="import-card backup-card">
+
+      <div class="import-card-text">
+
+        <span class="import-label">
+          BACKUP
+        </span>
+
+        <strong>
+          学習データのバックアップ
+        </strong>
+
+        <small>
+          進捗・要復習・間隔反復・マイノートをまとめて書き出し／復元
+        </small>
+
+      </div>
+
+      <div class="backup-actions">
+
+        <button
+          id="btn-export-backup"
+          class="small-btn btn"
+          type="button"
+        >
+          書き出し
+        </button>
+
+        <button
+          id="btn-import-backup"
+          class="small-btn btn"
+          type="button"
+        >
+          復元
+        </button>
+
+      </div>
+
+    </div>
+
+    <input
+      id="backup-import-file"
+      type="file"
+      accept=".json,application/json"
+      hidden
+    >
 
 
     <!-- AIインポートを上部へ -->
