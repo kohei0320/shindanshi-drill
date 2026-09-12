@@ -843,6 +843,262 @@ button {
 
 
 /* =========================================================
+   確信度評価
+   ========================================================= */
+
+.confidence-group {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.confidence-label {
+  margin: 0 0 10px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.confidence-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.confidence-btn {
+  min-height: 44px;
+  padding: 8px 6px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.confidence-btn:active {
+  transform: scale(0.96);
+}
+
+.confidence-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-dark);
+}
+
+
+/* =========================================================
+   マイノート（自分の言葉での説明）
+   ========================================================= */
+
+#explain-note {
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  outline: none;
+  font-size: 13px;
+  line-height: 1.7;
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#explain-note:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+
+/* =========================================================
+   間隔反復カード
+   ========================================================= */
+
+.srs-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.srs-card-text {
+  min-width: 0;
+}
+
+.srs-due-count {
+  display: block;
+  font-size: 21px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.srs-card-text small {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+
+/* =========================================================
+   学習ヒートマップ
+   ========================================================= */
+
+.heatmap-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-rows: repeat(7, 11px);
+  grid-auto-flow: column;
+  grid-auto-columns: 11px;
+  gap: 3px;
+  width: max-content;
+}
+
+.heatmap-cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--line-soft);
+}
+
+.heatmap-cell.is-empty {
+  background: transparent;
+}
+
+.heatmap-cell.level-1 {
+  background: var(--accent-bg);
+}
+
+.heatmap-cell.level-2 {
+  background: #e3b768;
+}
+
+.heatmap-cell.level-3 {
+  background: #cf9a3f;
+}
+
+.heatmap-cell.level-4 {
+  background: var(--accent-dark);
+}
+
+
+/* =========================================================
+   用語集フラッシュカード
+   ========================================================= */
+
+.flashcard-stage {
+  perspective: 1200px;
+  margin-bottom: 16px;
+}
+
+.flashcard {
+  width: 100%;
+  min-height: 220px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.flashcard-inner {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.3, 1);
+  transform-style: preserve-3d;
+}
+
+.flashcard.flipped .flashcard-inner {
+  transform: rotateY(180deg);
+}
+
+.flashcard-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.flashcard-face p {
+  margin: 0;
+  text-align: center;
+  line-height: 1.7;
+}
+
+.flashcard-front p {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.flashcard-back {
+  transform: rotateY(180deg);
+  background: var(--accent-bg);
+  border-color: var(--accent);
+}
+
+.flashcard-back p {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.flashcard-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.flashcard-controls .btn {
+  margin: 0;
+  padding-left: 8px;
+  padding-right: 8px;
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   バックアップカード
+   ========================================================= */
+
+.backup-card {
+  border-style: solid;
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.backup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.backup-actions .btn {
+  margin: 0;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
    Explanation
    ========================================================= */
 
@@ -1354,6 +1610,19 @@ button {
   color: var(--accent-dark);
   font-size: 11px;
   font-weight: 700;
+}
+
+.note-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 
