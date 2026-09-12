@@ -1,4 +1,4 @@
-const App = (() => {const App = (() => {
+const App = (() => {
   let questions = [];
   let state = Storage.emptyState();
   let lastResult = null;
