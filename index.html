@@ -50,8 +50,27 @@
   <section id="screen-home" class="screen">
 
     <header class="header">
-      <p class="eyebrow">中小企業診断士 1次試験</p>
-      <h1>診断士Drill</h1>
+      <div class="header-top">
+        <div class="header-titles">
+          <p class="eyebrow">中小企業診断士 1次試験</p>
+          <h1>診断士Drill</h1>
+        </div>
+
+        <button
+          id="btn-theme-toggle"
+          class="icon-btn"
+          type="button"
+          aria-label="ダークモードに切り替え"
+        >
+          🌙
+        </button>
+      </div>
+
+      <div id="streak-badge" class="streak-badge" hidden>
+        <span class="streak-mark">継続</span>
+        <strong id="streak-count">0</strong>
+        <span class="streak-unit">日目</span>
+      </div>
     </header>
 
 
@@ -369,6 +388,10 @@
         ☆
       </button>
 
+    </div>
+
+    <div class="quiz-progress-track">
+      <div id="quiz-progress-fill" class="quiz-progress-fill"></div>
     </div>
 
     <div class="quiz-card">
@@ -900,6 +923,41 @@
   </section>
 
 </main>
+
+
+<!-- トースト通知 -->
+<div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+<!-- 確認ダイアログ -->
+<div id="confirm-modal" class="modal-overlay" hidden>
+  <div
+    class="modal-box"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="confirm-modal-title"
+  >
+    <p id="confirm-modal-title" class="modal-title"></p>
+    <p id="confirm-modal-message" class="modal-message"></p>
+
+    <div class="modal-actions">
+      <button
+        id="confirm-modal-cancel"
+        class="btn"
+        type="button"
+      >
+        キャンセル
+      </button>
+
+      <button
+        id="confirm-modal-ok"
+        class="btn danger"
+        type="button"
+      >
+        OK
+      </button>
+    </div>
+  </div>
+</div>
 
 
 <script src="js/config.js"></script>
