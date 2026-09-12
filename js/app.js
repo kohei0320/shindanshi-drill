@@ -1899,59 +1899,41 @@ const App = (() => {
   }
 
   /* =========================================================
-     お気に入り
+     要復習フラグ
   ========================================================= */
 
   function renderFavoriteButton() {
-    const button =
-      document.getElementById(
-        "btn-favorite"
-      );
-
-    const question =
-      Quiz.currentQuestion();
-
+    const question = Quiz.currentQuestion();
     const on = !!(
       question &&
-      Storage.isFavorite(
-        state,
-        question.id
-      )
+      Storage.isFavorite(state, question.id)
     );
 
-    button.classList.toggle(
-      "on",
-      on
-    );
+    const starButton = document.getElementById("btn-favorite");
+    if (starButton) {
+      starButton.classList.toggle("on", on);
+      starButton.setAttribute("aria-pressed", on ? "true" : "false");
+      starButton.textContent = on ? "★" : "☆";
+    }
 
-    button.setAttribute(
-      "aria-pressed",
-      on
-        ? "true"
-        : "false"
-    );
+    const reviewButton = document.getElementById("btn-favorite-explain");
+    if (reviewButton) {
+      reviewButton.classList.toggle("on", on);
+      reviewButton.setAttribute("aria-pressed", on ? "true" : "false");
 
-    button.textContent =
-      on
-        ? "★"
-        : "☆";
+      const label = reviewButton.querySelector(".review-toggle-label");
+      if (label) {
+        label.textContent = on ? "要復習を解除する" : "要復習にする";
+      }
+    }
   }
 
   function toggleCurrentFavorite() {
-    const question =
-      Quiz.currentQuestion();
+    const question = Quiz.currentQuestion();
+    if (!question) return;
 
-    if (!question) {
-      return;
-    }
-
-    Storage.toggleFavorite(
-      state,
-      question.id
-    );
-
+    Storage.toggleFavorite(state, question.id);
     Storage.save(state);
-
     renderFavoriteButton();
   }
 
@@ -2227,6 +2209,7 @@ const App = (() => {
         ? "結果を見る"
         : "次の問題へ";
 
+    renderFavoriteButton();
     showScreen("explain");
   }
 
@@ -2274,7 +2257,7 @@ const App = (() => {
   }
 
   /* =========================================================
-     お気に入り一覧
+     要復習リスト
   ========================================================= */
 
   function renderFavorites() {
@@ -3752,7 +3735,7 @@ const App = (() => {
   ) {
     if (!ids.length) {
       showToast(
-        "お気に入りの問題はまだありません。",
+        "要復習に登録した問題はまだありません。",
         "info"
       );
 
@@ -3771,7 +3754,7 @@ const App = (() => {
       !Quiz.currentQuestion()
     ) {
       showToast(
-        "お気に入り問題を開始できませんでした。",
+        "要復習の問題を開始できませんでした。",
         "error"
       );
 
@@ -4147,6 +4130,15 @@ const App = (() => {
     document
       .getElementById(
         "btn-favorite"
+      )
+      .addEventListener(
+        "click",
+        toggleCurrentFavorite
+      );
+
+    document
+      .getElementById(
+        "btn-favorite-explain"
       )
       .addEventListener(
         "click",
