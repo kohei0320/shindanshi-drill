@@ -6,6 +6,14 @@ const App = (() => {
   let selectedCategory = null;
   let editingQuestionId = null;
 
+  let pendingSrsQuestionId = null;
+  let pendingSrsPrevBox = 0;
+  let pendingSrsIsCorrect = false;
+
+  let flashcards = [];
+  let flashcardIndex = 0;
+  let flashcardFlipped = false;
+
   const CUSTOM_QUESTIONS_KEY =
     "shindanshi_drill_custom_questions";
 
@@ -15,11 +23,28 @@ const App = (() => {
   const STREAK_KEY =
     "shindanshi_drill_streak";
 
+  const SRS_KEY =
+    "shindanshi_drill_srs";
+
+  const NOTES_KEY =
+    "shindanshi_drill_notes";
+
+  const DAILY_LOG_KEY =
+    "shindanshi_drill_daily_log";
+
+  /*
+   * Leitner式の箱ごとの復習間隔（日数）。
+   * box1〜box5に対応。
+   */
+  const LEITNER_INTERVALS = [1, 2, 4, 7, 14];
+
   const screens = {
     home: document.getElementById("screen-home"),
     subject: document.getElementById("screen-subject"),
     category: document.getElementById("screen-category"),
     favorites: document.getElementById("screen-favorites"),
+    notes: document.getElementById("screen-notes"),
+    flashcards: document.getElementById("screen-flashcards"),
     quiz: document.getElementById("screen-quiz"),
     explain: document.getElementById("screen-explain"),
     result: document.getElementById("screen-result"),
@@ -415,6 +440,530 @@ const App = (() => {
       "is-today",
       isActiveToday
     );
+  }
+
+  /* =========================================================
+     間隔反復（SRS / Leitner式）
+  ========================================================= */
+
+  function loadSrs() {
+    try {
+      const raw = localStorage.getItem(SRS_KEY);
+      if (!raw) return {};
+
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveSrs(map) {
+    localStorage.setItem(SRS_KEY, JSON.stringify(map));
+  }
+
+  function computeNextBox(prevBox, isCorrect, confidence) {
+    if (!isCorrect) return 1;
+
+    if (confidence === "guess") {
+      return Math.max(1, prevBox);
+    }
+
+    if (confidence === "confident") {
+      return Math.min((prevBox || 1) + 2, LEITNER_INTERVALS.length);
+    }
+
+    return Math.min((prevBox || 1) + 1, LEITNER_INTERVALS.length);
+  }
+
+  function applySrsUpdate(questionId, isCorrect, confidence, prevBox) {
+    if (!questionId) return null;
+
+    const map = loadSrs();
+    const nextBox = computeNextBox(prevBox, isCorrect, confidence);
+    const interval = LEITNER_INTERVALS[nextBox - 1] || 1;
+
+    map[questionId] = {
+      box: nextBox,
+      dueDate: dateKeyOffset(interval),
+      lastReviewed: todayKey()
+    };
+
+    saveSrs(map);
+    return map[questionId];
+  }
+
+  function selectSrsDueIds() {
+    const map = loadSrs();
+    const today = todayKey();
+
+    return Object.keys(map).filter(id =>
+      map[id] &&
+      map[id].dueDate <= today &&
+      questionById(id)
+    );
+  }
+
+  function renderSrsWidget() {
+    const countEl = document.getElementById("srs-due-count");
+    const button = document.getElementById("btn-srs-review");
+    if (!countEl || !button) return;
+
+    const dueCount = selectSrsDueIds().length;
+    countEl.textContent = `${dueCount}問`;
+    button.disabled = dueCount === 0;
+  }
+
+  function startSrsSession() {
+    const ids = selectSrsDueIds();
+
+    if (!ids.length) {
+      showToast("今日復習すべき間隔反復の問題はありません。", "info");
+      return;
+    }
+
+    const started = Quiz.start("srs", ids, null);
+
+    if (!started || !Quiz.currentQuestion()) {
+      showToast("間隔反復の復習を開始できませんでした。", "error");
+      return;
+    }
+
+    renderQuiz();
+  }
+
+  function setConfidence(level) {
+    if (!lastResult || !pendingSrsQuestionId) return;
+
+    applySrsUpdate(
+      pendingSrsQuestionId,
+      pendingSrsIsCorrect,
+      level,
+      pendingSrsPrevBox
+    );
+
+    document
+      .querySelectorAll("#confidence-group .confidence-btn")
+      .forEach(button => {
+        button.classList.toggle(
+          "selected",
+          button.dataset.level === level
+        );
+      });
+
+    renderSrsWidget();
+  }
+
+  /* =========================================================
+     マイノート（自分の言葉での説明）
+  ========================================================= */
+
+  function loadNotes() {
+    try {
+      const raw = localStorage.getItem(NOTES_KEY);
+      if (!raw) return {};
+
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveNotes(map) {
+    localStorage.setItem(NOTES_KEY, JSON.stringify(map));
+  }
+
+  function saveCurrentNote() {
+    if (!lastResult) return;
+
+    const textarea = document.getElementById("explain-note");
+    if (!textarea) return;
+
+    const text = textarea.value.trim();
+    const map = loadNotes();
+    const questionId = lastResult.question.id;
+
+    if (text) {
+      map[questionId] = {
+        text,
+        updatedAt: new Date().toISOString()
+      };
+    } else {
+      delete map[questionId];
+    }
+
+    saveNotes(map);
+  }
+
+  function renderNotesList() {
+    const map = loadNotes();
+    const ids = Object.keys(map).filter(id => questionById(id));
+
+    const empty = document.getElementById("notes-empty");
+    const list = document.getElementById("notes-list");
+    if (!empty || !list) return;
+
+    empty.hidden = ids.length > 0;
+
+    list.innerHTML = ids
+      .map(id => {
+        const question = questionById(id);
+        if (!question) return "";
+
+        return `
+          <li>
+            <button class="favorite-item" type="button" data-id="${escapeHtml(id)}">
+              <span class="fav-subject">
+                ${escapeHtml(getSubjectName(question.subject))}
+                ／
+                ${escapeHtml(question.category || "その他")}
+              </span>
+
+              ${escapeHtml(question.question)}
+
+              <span class="note-preview">
+                ${escapeHtml(map[id].text)}
+              </span>
+            </button>
+          </li>
+        `;
+      })
+      .join("");
+
+    showScreen("notes");
+  }
+
+  /* =========================================================
+     学習の記録（ヒートマップ）
+  ========================================================= */
+
+  function loadDailyLog() {
+    try {
+      const raw = localStorage.getItem(DAILY_LOG_KEY);
+      if (!raw) return {};
+
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveDailyLog(map) {
+    localStorage.setItem(DAILY_LOG_KEY, JSON.stringify(map));
+  }
+
+  function incrementDailyLog() {
+    const map = loadDailyLog();
+    const key = todayKey();
+    map[key] = (map[key] || 0) + 1;
+    saveDailyLog(map);
+  }
+
+  function renderHeatmap() {
+    const container = document.getElementById("study-heatmap");
+    if (!container) return;
+
+    const map = loadDailyLog();
+    const totalDays = 84;
+
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(start.getDate() - (totalDays - 1));
+
+    const startPad = start.getDay();
+    const cells = [];
+
+    for (let i = 0; i < startPad; i++) {
+      cells.push('<span class="heatmap-cell is-empty"></span>');
+    }
+
+    for (let i = 0; i < totalDays; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+
+      const key =
+        `${d.getFullYear()}-` +
+        `${String(d.getMonth() + 1).padStart(2, "0")}-` +
+        `${String(d.getDate()).padStart(2, "0")}`;
+
+      const count = map[key] || 0;
+
+      const level =
+        count === 0 ? 0 :
+        count <= 2 ? 1 :
+        count <= 5 ? 2 :
+        count <= 10 ? 3 : 4;
+
+      cells.push(
+        `<span class="heatmap-cell level-${level}" title="${key}：${count}問"></span>`
+      );
+    }
+
+    container.innerHTML = cells.join("");
+  }
+
+  /* =========================================================
+     用語集フラッシュカード
+  ========================================================= */
+
+  function shuffleArray(source) {
+    const array = source.slice();
+
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+
+    return array;
+  }
+
+  function buildFlashcardDeck() {
+    const map = new Map();
+
+    questions.forEach(question => {
+      (question.relatedKnowledge || []).forEach(item => {
+        const title = (item.title || "").trim();
+        const body = (item.body || "").trim();
+        if (!title || !body) return;
+
+        const key = title.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, { title, body });
+        }
+      });
+    });
+
+    return Array.from(map.values());
+  }
+
+  function renderFlashcard() {
+    if (!flashcards.length) return;
+
+    const card = flashcards[flashcardIndex];
+    const flashcardEl = document.getElementById("flashcard");
+
+    document.getElementById("flashcard-front-text").textContent = card.title;
+    document.getElementById("flashcard-back-text").textContent = card.body;
+
+    document.getElementById("flashcard-progress").textContent =
+      `${flashcardIndex + 1} / ${flashcards.length}`;
+
+    flashcardFlipped = false;
+    if (flashcardEl) flashcardEl.classList.remove("flipped");
+  }
+
+  function flipFlashcard() {
+    flashcardFlipped = !flashcardFlipped;
+
+    const flashcardEl = document.getElementById("flashcard");
+    if (flashcardEl) {
+      flashcardEl.classList.toggle("flipped", flashcardFlipped);
+    }
+  }
+
+  function nextFlashcard() {
+    if (!flashcards.length) return;
+    flashcardIndex = (flashcardIndex + 1) % flashcards.length;
+    renderFlashcard();
+  }
+
+  function prevFlashcard() {
+    if (!flashcards.length) return;
+    flashcardIndex =
+      (flashcardIndex - 1 + flashcards.length) % flashcards.length;
+    renderFlashcard();
+  }
+
+  function shuffleFlashcards() {
+    flashcards = shuffleArray(flashcards);
+    flashcardIndex = 0;
+    renderFlashcard();
+  }
+
+  function openFlashcards() {
+    flashcards = shuffleArray(buildFlashcardDeck());
+    flashcardIndex = 0;
+
+    if (!flashcards.length) {
+      showToast("関連知識が登録された問題がまだありません。", "info");
+      return;
+    }
+
+    renderFlashcard();
+    showScreen("flashcards");
+  }
+
+  /* =========================================================
+     弱点だけで自動ドリル
+  ========================================================= */
+
+  function buildWeakDrillIds(limit = 20) {
+    const summary = Stats.summarize(questions, state);
+
+    const weakCategories = Object.values(summary.byCategory)
+      .filter(item => item.total > 0)
+      .map(item => ({
+        ...item,
+        accuracy: item.correct / item.total
+      }))
+      .sort((a, b) => a.accuracy - b.accuracy)
+      .slice(0, 5);
+
+    if (!weakCategories.length) return [];
+
+    const pool = weakCategories.map(item => ({
+      ...item,
+      questions: questions.filter(q =>
+        q.subject === item.subject &&
+        (q.category || "その他") === item.category
+      )
+    }));
+
+    const usedIds = new Set();
+    const picked = [];
+    let guard = 0;
+
+    while (picked.length < limit && guard < limit * 20) {
+      guard++;
+
+      for (const item of pool) {
+        if (picked.length >= limit) break;
+
+        const candidates = item.questions.filter(
+          q => !usedIds.has(q.id)
+        );
+
+        if (!candidates.length) continue;
+
+        const pick =
+          candidates[
+            Math.floor(Math.random() * candidates.length)
+          ];
+
+        usedIds.add(pick.id);
+        picked.push(pick.id);
+      }
+
+      if (pool.every(item =>
+        item.questions.every(q => usedIds.has(q.id))
+      )) {
+        break;
+      }
+    }
+
+    return picked.slice(0, limit);
+  }
+
+  function startWeakDrill() {
+    const ids = buildWeakDrillIds(20);
+
+    if (!ids.length) {
+      showToast(
+        "弱点ドリルを作成するには、もう少し学習データが必要です。",
+        "info"
+      );
+      return;
+    }
+
+    const started = Quiz.start("weak", ids, null);
+
+    if (!started || !Quiz.currentQuestion()) {
+      showToast("弱点ドリルを開始できませんでした。", "error");
+      return;
+    }
+
+    renderQuiz();
+  }
+
+  /* =========================================================
+     学習データのバックアップ／復元
+  ========================================================= */
+
+  async function exportBackup() {
+    try {
+      const payload = {
+        app: "shindanshi-drill",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        state,
+        customQuestions: getCustomQuestions(),
+        extras: {
+          streak: loadStreak(),
+          srs: loadSrs(),
+          notes: loadNotes(),
+          dailyLog: loadDailyLog()
+        }
+      };
+
+      const blob = new Blob(
+        [JSON.stringify(payload, null, 2)],
+        { type: "application/json" }
+      );
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `shindanshi-drill-backup-${todayKey()}.json`;
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      URL.revokeObjectURL(url);
+
+      showToast("学習データを書き出しました。", "success");
+    } catch (error) {
+      console.error("バックアップの書き出しに失敗しました", error);
+      showToast(`書き出しに失敗しました。${error.message}`, "error");
+    }
+  }
+
+  async function importBackupFromFile(file) {
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+
+      if (!payload || typeof payload !== "object" || !payload.state) {
+        throw new Error("バックアップファイルの形式が正しくありません。");
+      }
+
+      const confirmed = await confirmDialog(
+        "現在の学習データはバックアップの内容で上書きされます。この操作は元に戻せません。",
+        { title: "学習データを復元しますか？", okLabel: "復元する" }
+      );
+
+      if (!confirmed) return;
+
+      if (
+        Array.isArray(payload.customQuestions) &&
+        payload.customQuestions.length
+      ) {
+        await QuestionDB.putMany(payload.customQuestions);
+      }
+
+      Storage.save(payload.state);
+
+      const extras = payload.extras || {};
+      if (extras.streak) saveStreak(extras.streak);
+      if (extras.srs) saveSrs(extras.srs);
+      if (extras.notes) saveNotes(extras.notes);
+      if (extras.dailyLog) saveDailyLog(extras.dailyLog);
+
+      showToast(
+        "学習データを復元しました。まもなく再読み込みします。",
+        "success"
+      );
+
+      window.setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+      console.error("バックアップの復元に失敗しました", error);
+      showToast(`復元に失敗しました。${error.message}`, "error");
+    }
   }
 
   /* =========================================================
@@ -1615,6 +2164,10 @@ const App = (() => {
 
     renderStreakBadge();
 
+    renderSrsWidget();
+
+    renderHeatmap();
+
     /*
      * Daily未完了
      */
@@ -1857,6 +2410,21 @@ const App = (() => {
     Storage.save(state);
 
     updateStreak();
+    incrementDailyLog();
+
+    const srsMapBefore = loadSrs();
+    const previousEntry = srsMapBefore[submitted.question.id];
+
+    pendingSrsQuestionId = submitted.question.id;
+    pendingSrsPrevBox = previousEntry ? previousEntry.box : 0;
+    pendingSrsIsCorrect = submitted.result.isCorrect;
+
+    applySrsUpdate(
+      pendingSrsQuestionId,
+      pendingSrsIsCorrect,
+      "normal",
+      pendingSrsPrevBox
+    );
 
     lastResult =
       submitted;
@@ -1971,6 +2539,16 @@ const App = (() => {
       "explain-question"
     ).textContent =
       question.question;
+
+    document
+      .querySelectorAll("#confidence-group .confidence-btn")
+      .forEach(button => button.classList.remove("selected"));
+
+    const noteField = document.getElementById("explain-note");
+    if (noteField) {
+      const savedNote = loadNotes()[question.id];
+      noteField.value = savedNote ? savedNote.text : "";
+    }
 
     document.getElementById(
       "explain-answer"
@@ -4245,6 +4823,105 @@ const App = (() => {
         );
       }
     );
+
+    /*
+     * 間隔反復
+     */
+    document
+      .getElementById("btn-srs-review")
+      .addEventListener("click", startSrsSession);
+
+    /*
+     * 弱点だけで自動ドリル
+     */
+    document
+      .getElementById("btn-weak-drill")
+      .addEventListener("click", startWeakDrill);
+
+    /*
+     * 確信度評価
+     */
+    document
+      .getElementById("confidence-group")
+      .addEventListener("click", event => {
+        const button = event.target.closest(".confidence-btn");
+        if (button) setConfidence(button.dataset.level);
+      });
+
+    /*
+     * マイノート
+     */
+    const noteField = document.getElementById("explain-note");
+    if (noteField) {
+      noteField.addEventListener("blur", saveCurrentNote);
+    }
+
+    document
+      .getElementById("btn-notes-list")
+      .addEventListener("click", renderNotesList);
+
+    document
+      .getElementById("btn-notes-back")
+      .addEventListener("click", renderHome);
+
+    document
+      .getElementById("notes-list")
+      .addEventListener("click", event => {
+        const button = event.target.closest("[data-id]");
+        if (button) {
+          startFavoriteSession([button.getAttribute("data-id")]);
+        }
+      });
+
+    /*
+     * 用語集フラッシュカード
+     */
+    document
+      .getElementById("btn-flashcards")
+      .addEventListener("click", openFlashcards);
+
+    document
+      .getElementById("btn-flashcards-back")
+      .addEventListener("click", renderHome);
+
+    document
+      .getElementById("flashcard")
+      .addEventListener("click", flipFlashcard);
+
+    document
+      .getElementById("btn-flashcard-next")
+      .addEventListener("click", nextFlashcard);
+
+    document
+      .getElementById("btn-flashcard-prev")
+      .addEventListener("click", prevFlashcard);
+
+    document
+      .getElementById("btn-flashcard-shuffle")
+      .addEventListener("click", shuffleFlashcards);
+
+    /*
+     * 学習データのバックアップ／復元
+     */
+    document
+      .getElementById("btn-export-backup")
+      .addEventListener("click", exportBackup);
+
+    const backupImportFile =
+      document.getElementById("backup-import-file");
+
+    const backupImportButton =
+      document.getElementById("btn-import-backup");
+
+    backupImportButton.addEventListener("click", () => {
+      backupImportFile.value = "";
+      backupImportFile.click();
+    });
+
+    backupImportFile.addEventListener("change", async event => {
+      const file = event.target.files?.[0];
+      await importBackupFromFile(file);
+    });
   }
 
   /* =========================================================
