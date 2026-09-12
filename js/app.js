@@ -290,10 +290,6 @@ const App = (() => {
       問題読み込み
       ========================= */
 
-  /* =========================
-     問題読み込み
-     ========================= */
-
   async function loadQuestions() {
     questions = await QuestionDB.getAll();
 
