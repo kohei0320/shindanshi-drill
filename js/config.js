@@ -1,7 +1,7 @@
 const APP_CONFIG = {
   name: "診断士Drill",
   storageKey: "shindanshi-drill-v1",
-  dailyCount: 20,
+  dailyCount: 50,
   subjects: [
     { id: "economics", name: "経済学・経済政策" },
     { id: "finance", name: "財務・会計" },
