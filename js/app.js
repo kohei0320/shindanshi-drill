@@ -277,9 +277,6 @@ const App = (() => {
   function isCustomQuestion(question) {
     return !!(question && question.custom === true);
   }
-function isCustomQuestion(question) {
-  return !!(question && question.custom === true);
-}
 
 function getCustomQuestions() {
   return questions.filter(question => isCustomQuestion(question));
