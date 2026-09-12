@@ -149,7 +149,7 @@ const App = (() => {
     const button = document.getElementById("btn-theme-toggle");
     if (!button) return;
 
-    button.textContent = theme === "dark" ? "☀️" : "🌙";
+    button.textContent = theme === "dark" ? "☀" : "🌙";
     button.setAttribute(
       "aria-label",
       theme === "dark" ? "ライトモードに切り替え" : "ダークモードに切り替え"
@@ -1233,6 +1233,35 @@ const App = (() => {
         );
       }
 
+      /*
+       * 今日の演習(daily)に、削除した問題のIDが含まれている場合は
+       * daily側からも取り除く。全問削除されて0件になった場合は
+       * 空セッションのまま固まらないようdaily自体をリセットする。
+       */
+      if (
+        state.daily &&
+        Array.isArray(state.daily.questionIds) &&
+        state.daily.questionIds.includes(id)
+      ) {
+        const filteredIds = state.daily.questionIds.filter(
+          qid => qid !== id
+        );
+        const filteredAnswers = Array.isArray(state.daily.answers)
+          ? state.daily.answers.filter(answer => {
+              const answerId = answer?.questionId || answer?.id;
+              return answerId !== id;
+            })
+          : [];
+
+        if (filteredIds.length === 0) {
+          state.daily = null;
+        } else {
+          state.daily.questionIds = filteredIds;
+          state.daily.answers = filteredAnswers;
+          state.daily.currentIndex = filteredAnswers.length;
+        }
+      }
+
       Storage.save(state);
 
       showToast("問題を削除しました。", "success");
@@ -1425,14 +1454,30 @@ const App = (() => {
       }
 
       if (state.daily && Array.isArray(state.daily.questionIds)) {
-        state.daily.questionIds = state.daily.questionIds.filter(id => !customIds.has(id));
-        state.daily.answers = Array.isArray(state.daily.answers)
+        const filteredIds = state.daily.questionIds.filter(
+          id => !customIds.has(id)
+        );
+        const filteredAnswers = Array.isArray(state.daily.answers)
           ? state.daily.answers.filter(answer => {
               const id = answer?.questionId || answer?.id;
               return !customIds.has(id);
             })
           : [];
-        state.daily.currentIndex = state.daily.answers.length;
+
+        if (filteredIds.length === 0) {
+          /*
+           * 今日の演習に含まれていた問題が全て削除された場合、
+           * questionIdsが空のセッションがcompleted:falseのまま
+           * 残ってしまい、「今日の演習を再開」を押しても
+           * 0/0問のまま何も起きなくなる不具合を防ぐため、
+           * dailyごとリセットする。
+           */
+          state.daily = null;
+        } else {
+          state.daily.questionIds = filteredIds;
+          state.daily.answers = filteredAnswers;
+          state.daily.currentIndex = filteredAnswers.length;
+        }
       }
 
       Storage.save(state);
