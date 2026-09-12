@@ -279,12 +279,12 @@ const App = (() => {
   }
 
 function getCustomQuestions() {
-  return questions.filter(question => isCustomQuestion(question));
-}
+return questions.filter(question => isCustomQuestion(question));
+   }
 
 function questionById(id) {
-  return questions.find(question => question.id === id);
-}
+return questions.find(question => question.id === id);
+ }
 
   /* =========================
      問題読み込み
