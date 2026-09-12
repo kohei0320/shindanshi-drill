@@ -124,7 +124,7 @@
     </button>
 
 
-    <!-- 復習・お気に入り -->
+    <!-- 復習・要復習リスト -->
 
     <div class="home-action-group">
 
@@ -141,7 +141,7 @@
         class="btn"
         type="button"
       >
-        お気に入り
+        要復習リスト
       </button>
 
     </div>
@@ -321,15 +321,16 @@
         ホーム
       </button>
 
-      <p class="progress">お気に入り</p>
+      <p class="progress">要復習リスト</p>
 
       <span></span>
 
     </div>
 
     <div class="page-heading">
-      <p class="section-kicker">FAVORITES</p>
-      <h2>お気に入り</h2>
+      <p class="section-kicker">NEEDS REVIEW</p>
+      <h2>要復習リスト</h2>
+      <p>自分で「要復習」に登録した問題だけを解き直せます。</p>
     </div>
 
     <button
@@ -337,15 +338,15 @@
       class="btn primary"
       type="button"
     >
-      お気に入りを演習
+      要復習の問題を演習
     </button>
 
     <p
       id="favorites-empty"
       class="note"
     >
-      お気に入りはまだありません。
-      問題画面の☆から登録できます。
+      要復習に登録した問題はまだありません。
+      回答後の「要復習にする」から登録できます。
     </p>
 
     <ul
@@ -387,7 +388,7 @@
         id="btn-favorite"
         class="star-btn"
         type="button"
-        aria-label="お気に入り"
+        aria-label="要復習に登録"
         aria-pressed="false"
       >
         ☆
@@ -522,6 +523,16 @@
 
     </div>
 
+
+    <button
+      id="btn-favorite-explain"
+      class="review-toggle"
+      type="button"
+      aria-pressed="false"
+    >
+      <span class="review-toggle-icon">🚩</span>
+      <span class="review-toggle-label">要復習にする</span>
+    </button>
 
     <button
       id="btn-next"
