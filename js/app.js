@@ -7,6 +7,8 @@ const App = (() => {
   let editingQuestionId = null;
 
   const CUSTOM_QUESTIONS_KEY = "shindanshi_drill_custom_questions";
+  const THEME_KEY = "shindanshi_drill_theme";
+  const STREAK_KEY = "shindanshi_drill_streak";
 
   const screens = {
     home: document.getElementById("screen-home"),
@@ -55,6 +57,182 @@ const App = (() => {
   function getSubjectName(subjectId) {
     const subject = APP_CONFIG.subjects.find(item => item.id === subjectId);
     return subject ? subject.name : subjectId;
+  }
+
+  /* =========================
+     トースト通知
+     ========================= */
+
+  function showToast(message, type = "info") {
+    const container = document.getElementById("toast-container");
+
+    if (!container) {
+      window.alert(message);
+      return;
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    window.requestAnimationFrame(() => {
+      toast.classList.add("is-visible");
+    });
+
+    window.setTimeout(() => {
+      toast.classList.remove("is-visible");
+      window.setTimeout(() => toast.remove(), 220);
+    }, 3400);
+  }
+
+  /* =========================
+     確認ダイアログ（カスタムモーダル）
+     ========================= */
+
+  function confirmDialog(message, options = {}) {
+    return new Promise(resolve => {
+      const overlay = document.getElementById("confirm-modal");
+
+      if (!overlay) {
+        resolve(window.confirm(message));
+        return;
+      }
+
+      const titleEl = document.getElementById("confirm-modal-title");
+      const messageEl = document.getElementById("confirm-modal-message");
+      const okButton = document.getElementById("confirm-modal-ok");
+      const cancelButton = document.getElementById("confirm-modal-cancel");
+
+      titleEl.textContent = options.title || "確認";
+      messageEl.textContent = message;
+      okButton.textContent = options.okLabel || "OK";
+      overlay.hidden = false;
+
+      window.requestAnimationFrame(() => {
+        overlay.classList.add("is-visible");
+      });
+
+      function cleanup(result) {
+        overlay.classList.remove("is-visible");
+        window.setTimeout(() => { overlay.hidden = true; }, 160);
+        okButton.removeEventListener("click", onOk);
+        cancelButton.removeEventListener("click", onCancel);
+        overlay.removeEventListener("click", onOverlayClick);
+        document.removeEventListener("keydown", onKeydown);
+        resolve(result);
+      }
+
+      function onOk() { cleanup(true); }
+      function onCancel() { cleanup(false); }
+      function onOverlayClick(event) {
+        if (event.target === overlay) cleanup(false);
+      }
+      function onKeydown(event) {
+        if (event.key === "Escape") cleanup(false);
+      }
+
+      okButton.addEventListener("click", onOk);
+      cancelButton.addEventListener("click", onCancel);
+      overlay.addEventListener("click", onOverlayClick);
+      document.addEventListener("keydown", onKeydown);
+    });
+  }
+
+  /* =========================
+     テーマ（ライト／ダーク）
+     ========================= */
+
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+
+    const button = document.getElementById("btn-theme-toggle");
+    if (!button) return;
+
+    button.textContent = theme === "dark" ? "☀️" : "🌙";
+    button.setAttribute(
+      "aria-label",
+      theme === "dark" ? "ライトモードに切り替え" : "ダークモードに切り替え"
+    );
+  }
+
+  function initTheme() {
+    const stored = localStorage.getItem(THEME_KEY);
+    const prefersDark =
+      window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    applyTheme(stored || (prefersDark ? "dark" : "light"));
+
+    const button = document.getElementById("btn-theme-toggle");
+    if (!button) return;
+
+    button.addEventListener("click", () => {
+      const next =
+        document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      localStorage.setItem(THEME_KEY, next);
+      applyTheme(next);
+    });
+  }
+
+  /* =========================
+     学習ストリーク（連続学習日数）
+     ========================= */
+
+  function loadStreak() {
+    try {
+      const raw = localStorage.getItem(STREAK_KEY);
+      if (!raw) return { lastDate: null, count: 0 };
+
+      const parsed = JSON.parse(raw);
+      return {
+        lastDate: parsed?.lastDate || null,
+        count: Number(parsed?.count) || 0
+      };
+    } catch (error) {
+      return { lastDate: null, count: 0 };
+    }
+  }
+
+  function saveStreak(streak) {
+    localStorage.setItem(STREAK_KEY, JSON.stringify(streak));
+  }
+
+  function dateKeyOffset(days) {
+    const now = new Date();
+    now.setDate(now.getDate() + days);
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  function updateStreak() {
+    const today = todayKey();
+    const streak = loadStreak();
+
+    if (streak.lastDate === today) return streak;
+
+    const yesterday = dateKeyOffset(-1);
+    const nextCount = streak.lastDate === yesterday ? streak.count + 1 : 1;
+
+    const next = { lastDate: today, count: nextCount };
+    saveStreak(next);
+    renderStreakBadge();
+    return next;
+  }
+
+  function renderStreakBadge() {
+    const badge = document.getElementById("streak-badge");
+    const countEl = document.getElementById("streak-count");
+    if (!badge || !countEl) return;
+
+    const streak = loadStreak();
+    const isActiveToday = streak.lastDate === todayKey();
+
+    badge.hidden = streak.count === 0;
+    countEl.textContent = String(streak.count);
+    badge.classList.toggle("is-today", isActiveToday);
   }
 
   /* =========================
@@ -192,7 +370,7 @@ function questionById(id) {
       );
 
       if (!ids.length) {
-        alert("出題できる問題がありません。");
+        showToast("出題できる問題がありません。", "error");
         return;
       }
 
@@ -232,7 +410,7 @@ function questionById(id) {
     );
 
     if (!ids.length) {
-      alert("出題できる問題がありません。");
+      showToast("出題できる問題がありません。", "error");
       return;
     }
 
@@ -421,7 +599,7 @@ function questionById(id) {
     );
 
     if (!ids.length) {
-      alert("この分野には出題できる問題がありません。");
+      showToast("この分野には出題できる問題がありません。", "error");
       return;
     }
 
@@ -504,6 +682,7 @@ function questionById(id) {
 
     renderSubjects();
     renderWeakCategories();
+    renderStreakBadge();
 
     if (daily && !daily.completed) {
       startButton.textContent = "今日の演習を再開";
@@ -551,6 +730,14 @@ function questionById(id) {
     document.getElementById("quiz-progress").textContent =
       `${session.currentIndex + 1} / ${session.questionIds.length}`;
 
+    const progressFill = document.getElementById("quiz-progress-fill");
+    if (progressFill) {
+      const percent = Math.round(
+        (session.currentIndex / session.questionIds.length) * 100
+      );
+      progressFill.style.width = `${Math.min(100, Math.max(4, percent))}%`;
+    }
+
     document.getElementById("quiz-meta").textContent =
       `${getSubjectName(question.subject)} ／ ${question.category || "その他"} ／ 難易度${question.difficulty}`;
 
@@ -559,13 +746,16 @@ function questionById(id) {
 
     const choices = document.getElementById("quiz-choices");
     choices.innerHTML = "";
+    choices.classList.remove("answered");
 
     question.choices.forEach((label, index) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "choice";
-      button.textContent =
-        `${["ア", "イ", "ウ", "エ"][index]} ${label}`;
+      button.dataset.index = String(index);
+      button.innerHTML =
+        `<span class="choice-letter">${["ア", "イ", "ウ", "エ"][index]}</span>` +
+        `<span class="choice-text">${escapeHtml(label)}</span>`;
       button.addEventListener("click", () => answerQuestion(index));
       choices.appendChild(button);
     });
@@ -575,6 +765,9 @@ function questionById(id) {
   }
 
   function answerQuestion(choiceIndex) {
+    const choicesContainer = document.getElementById("quiz-choices");
+    if (choicesContainer.classList.contains("answered")) return;
+
     const submitted = Quiz.submit(choiceIndex);
     if (!submitted) return;
 
@@ -586,9 +779,26 @@ function questionById(id) {
 
     persistDailyFromSession(Quiz.getSession());
     Storage.save(state);
+    updateStreak();
 
     lastResult = submitted;
-    renderExplain();
+
+    /*
+     * 一瞬だけ正解／不正解を選択肢上に表示してから解説画面へ。
+     */
+    choicesContainer.classList.add("answered");
+
+    choicesContainer.querySelectorAll(".choice").forEach(button => {
+      const index = Number(button.dataset.index);
+
+      if (index === submitted.question.answer) {
+        button.classList.add("is-correct");
+      } else if (index === choiceIndex) {
+        button.classList.add("is-wrong");
+      }
+    });
+
+    window.setTimeout(renderExplain, 420);
   }
 
   function renderFavoriteButton() {
@@ -834,7 +1044,7 @@ function questionById(id) {
     const question = questionById(id);
 
     if (!question || !isCustomQuestion(question)) {
-      alert("この問題は編集できません。");
+      showToast("この問題は編集できません。", "error");
       return;
     }
 
@@ -907,19 +1117,19 @@ function questionById(id) {
       document.getElementById("create-related").value.trim();
 
     if (!subject) {
-      alert("科目を選択してください。");
+      showToast("科目を選択してください。", "error");
       return null;
     }
     if (!category) {
-      alert("分野を入力してください。");
+      showToast("分野を入力してください。", "error");
       return null;
     }
     if (!questionText) {
-      alert("問題文を入力してください。");
+      showToast("問題文を入力してください。", "error");
       return null;
     }
     if (choices.some(choice => !choice)) {
-      alert("4つの選択肢をすべて入力してください。");
+      showToast("4つの選択肢をすべて入力してください。", "error");
       return null;
     }
 
@@ -976,14 +1186,14 @@ function questionById(id) {
       customQuestions.push(newQuestion);
       saveCustomQuestions(customQuestions);
 
-      alert(editingQuestionId ? "問題を更新しました。" : "問題を保存しました。");
+      showToast(editingQuestionId ? "問題を更新しました。" : "問題を保存しました。", "success");
 
       editingQuestionId = null;
       clearQuestionForm();
       renderHome();
     } catch (error) {
       console.error("問題の保存に失敗しました", error);
-      alert(`問題の保存に失敗しました。\n\n${error.message}`);
+      showToast(`問題の保存に失敗しました。${error.message}`, "error");
     }
   }
 
@@ -995,12 +1205,13 @@ function questionById(id) {
     const question = questionById(id);
 
     if (!question || !isCustomQuestion(question)) {
-      alert("削除できる自作問題ではありません。");
+      showToast("削除できる自作問題ではありません。", "error");
       return;
     }
 
-    const confirmed = window.confirm(
-      `この問題を削除しますか？\n\n${question.question}`
+    const confirmed = await confirmDialog(
+      question.question,
+      { title: "この問題を削除しますか？", okLabel: "削除する" }
     );
 
     if (!confirmed) return;
@@ -1027,13 +1238,13 @@ function questionById(id) {
 
       Storage.save(state);
 
-      alert("問題を削除しました。");
+      showToast("問題を削除しました。", "success");
 
       editingQuestionId = null;
       renderManageQuestions();
     } catch (error) {
       console.error("問題の削除に失敗しました", error);
-      alert(`問題の削除に失敗しました。\n\n${error.message}`);
+      showToast(`問題の削除に失敗しました。${error.message}`, "error");
     }
   }
 
@@ -1185,12 +1396,13 @@ function questionById(id) {
     const customQuestions = getCustomQuestions();
 
     if (!customQuestions.length) {
-      alert("削除する自作問題はありません。");
+      showToast("削除する自作問題はありません。", "info");
       return;
     }
 
-    const confirmed = window.confirm(
-      `自作問題をすべて削除しますか？\n\n${customQuestions.length}問が削除されます。\nこの操作は元に戻せません。`
+    const confirmed = await confirmDialog(
+      `${customQuestions.length}問が削除されます。この操作は元に戻せません。`,
+      { title: "自作問題をすべて削除しますか？", okLabel: "すべて削除" }
     );
 
     if (!confirmed) return;
@@ -1229,11 +1441,11 @@ function questionById(id) {
       Storage.save(state);
       editingQuestionId = null;
 
-      alert(`${customQuestions.length}問の自作問題を削除しました。`);
+      showToast(`${customQuestions.length}問の自作問題を削除しました。`, "success");
       renderManageQuestions();
     } catch (error) {
       console.error("自作問題の全削除に失敗しました", error);
-      alert(`自作問題の全削除に失敗しました。\n\n${error.message}`);
+      showToast(`自作問題の全削除に失敗しました。${error.message}`, "error");
     }
   }
 
@@ -1310,19 +1522,16 @@ function questionById(id) {
 
       saveCustomQuestions(Array.from(map.values()));
 
-      alert(
-        `${normalized.length}問を取り込みました。\n\n` +
-        `現在の総問題数：${questions.length}問`
+      showToast(
+        `${normalized.length}問を取り込みました。現在の総問題数：${questions.length}問`,
+        "success"
       );
 
       renderManageQuestions();
     } catch (error) {
       console.error("AI問題のインポートに失敗しました", error);
 
-      alert(
-        "問題の読み込みに失敗しました。\n\n" +
-        error.message
-      );
+      showToast(`問題の読み込みに失敗しました。${error.message}`, "error");
     }
   }
 
@@ -1337,7 +1546,7 @@ function questionById(id) {
     );
 
     if (!ids.length) {
-      alert("復習できる間違えた問題はまだありません。");
+      showToast("復習できる間違えた問題はまだありません。", "info");
       return;
     }
 
@@ -1351,7 +1560,7 @@ function questionById(id) {
 
   function startFavoriteSession(ids) {
     if (!ids.length) {
-      alert("お気に入りの問題はまだありません。");
+      showToast("お気に入りの問題はまだありません。", "info");
       return;
     }
 
@@ -1364,6 +1573,37 @@ function questionById(id) {
      ========================= */
 
   function bindEvents() {
+    /*
+     * キーボードショートカット：
+     * 問題画面では数字キー1〜4で選択肢を回答、
+     * 解説画面ではEnter／スペースで次の問題へ。
+     */
+    document.addEventListener("keydown", event => {
+      const tag = (event.target && event.target.tagName) || "";
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(tag)) return;
+
+      if (!screens.quiz.hidden) {
+        const indexMap = { "1": 0, "2": 1, "3": 2, "4": 3 };
+        if (indexMap[event.key] === undefined) return;
+
+        const choicesContainer = document.getElementById("quiz-choices");
+        if (choicesContainer.classList.contains("answered")) return;
+
+        const button = choicesContainer.querySelector(
+          `[data-index="${indexMap[event.key]}"]`
+        );
+        if (button) button.click();
+        return;
+      }
+
+      if (!screens.explain.hidden) {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          document.getElementById("btn-next").click();
+        }
+      }
+    });
+
     document.getElementById("btn-start-daily")
       .addEventListener("click", startDaily);
 
@@ -1539,6 +1779,7 @@ function questionById(id) {
       onUpdate: persistDailyFromSession
     });
 
+    initTheme();
     bindEvents();
     renderHome();
   }
