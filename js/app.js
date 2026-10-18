@@ -50,6 +50,7 @@ const App = (() => {
     materials: document.getElementById("screen-materials"),
     materialView: document.getElementById("screen-material-view"),
     materialEdit: document.getElementById("screen-material-edit"),
+    dailyPreview: document.getElementById("screen-daily-preview"),
     quiz: document.getElementById("screen-quiz"),
     explain: document.getElementById("screen-explain"),
     result: document.getElementById("screen-result"),
@@ -485,8 +486,9 @@ const App = (() => {
 
   function computeNextBox(prevBox, isCorrect, confidence) {
     if (!isCorrect) return 1;
+    if (confidence === "weak") return 1;
 
-    if (confidence === "guess") {
+    if (confidence === "review" || confidence === "guess") {
       return Math.max(1, prevBox);
     }
 
@@ -563,15 +565,14 @@ const App = (() => {
       pendingSrsPrevBox
     );
 
-    document
-      .querySelectorAll("#confidence-group .confidence-btn")
-      .forEach(button => {
-        button.classList.toggle(
-          "selected",
-          button.dataset.level === level
-        );
-      });
+    const stats = loadQStats();
+    const entry = stats[pendingSrsQuestionId] || { n: 1 };
+    entry.level = level;
+    entry.at = Date.now();
+    stats[pendingSrsQuestionId] = entry;
+    saveQStats(stats);
 
+    markConfidenceButtons(level);
     renderSrsWidget();
   }
 
@@ -1491,6 +1492,413 @@ const App = (() => {
     if (tab !== "home") showScreen(tab);
   }
 
+
+  /* =========================================================
+     自信度（4段階）・回答数
+  ========================================================= */
+
+  const QSTATS_KEY = "shindanshi_drill_qstats";
+
+  const CONFIDENCE_LEVELS = [
+    { id: "confident", label: "自信あり", icon: "💪" },
+    { id: "normal", label: "普通", icon: "🙂" },
+    { id: "review", label: "要復習", icon: "🔁" },
+    { id: "weak", label: "理解不足", icon: "😣" }
+  ];
+
+  function confidenceMeta(level) {
+    return CONFIDENCE_LEVELS.find(item => item.id === level) || null;
+  }
+
+  function loadQStats() {
+    try {
+      const raw = localStorage.getItem(QSTATS_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveQStats(map) {
+    localStorage.setItem(QSTATS_KEY, JSON.stringify(map));
+  }
+
+  function historyCount(entry) {
+    if (!entry) return 0;
+    if (Array.isArray(entry)) return entry.length;
+
+    if (typeof entry === "object") {
+      for (const key of ["attempts", "log", "logs", "results", "records", "answers", "history"]) {
+        if (Array.isArray(entry[key])) return entry[key].length;
+      }
+
+      const num = value => (typeof value === "number" ? value : 0);
+      const wrong =
+        num(entry.wrong) + num(entry.incorrect) +
+        num(entry.wrongCount) + num(entry.incorrectCount);
+      const correct = num(entry.correct) + num(entry.correctCount);
+
+      return num(entry.total) || num(entry.count) || num(entry.attempts) || correct + wrong;
+    }
+
+    return 1;
+  }
+
+  /*
+   * 回答直後：正解→普通、不正解→理解不足を自動設定。
+   */
+  function recordQuestionStat(questionId, isCorrect) {
+    if (!questionId) return;
+
+    const stats = loadQStats();
+    const previous = stats[questionId];
+
+    const firstCount = Math.max(
+      historyCount(state.history ? state.history[questionId] : null),
+      1
+    );
+
+    stats[questionId] = {
+      level: isCorrect ? "normal" : "weak",
+      n: previous && previous.n ? previous.n + 1 : firstCount,
+      at: Date.now()
+    };
+
+    saveQStats(stats);
+  }
+
+  function effectiveConfidence(id, stats, attempts) {
+    const stat = stats[id];
+    if (stat && stat.level) return stat.level;
+
+    const info = questionStudyInfo(id, attempts);
+    if (!info.answered) return null;
+
+    const last = info.recent[info.recent.length - 1];
+    return last === false ? "weak" : "normal";
+  }
+
+  function effectiveAnswerCount(id, stats, attempts) {
+    const stat = stats[id];
+    if (stat && stat.n) return stat.n;
+
+    const log = attempts[id];
+    if (Array.isArray(log) && log.length) return log.length;
+
+    return historyCount(state.history ? state.history[id] : null);
+  }
+
+  function currentConfidenceLevel(questionId) {
+    const stat = loadQStats()[questionId];
+    return stat ? stat.level : null;
+  }
+
+  function markConfidenceButtons(level) {
+    document
+      .querySelectorAll("#confidence-group .confidence-btn")
+      .forEach(button => {
+        button.classList.toggle("selected", button.dataset.level === level);
+      });
+  }
+
+  function confidenceChipHtml(level) {
+    const meta = confidenceMeta(level);
+
+    return meta
+      ? `<span class="conf-chip" data-level="${meta.id}">${meta.icon} ${meta.label}</span>`
+      : `<span class="conf-chip" data-level="none">🆕 未回答</span>`;
+  }
+
+  function renderQuizConfidence(questionId) {
+    const el = document.getElementById("quiz-confidence");
+    if (!el) return;
+
+    const stats = loadQStats();
+    const attempts = loadAttempts();
+    const level = effectiveConfidence(questionId, stats, attempts);
+
+    if (!level) {
+      el.innerHTML = confidenceChipHtml(null);
+      return;
+    }
+
+    const count = Math.max(effectiveAnswerCount(questionId, stats, attempts), 1);
+
+    el.innerHTML =
+      `<span class="conf-label">前回の自信度</span>` +
+      confidenceChipHtml(level) +
+      `<span class="preview-count">回答${count}回</span>`;
+  }
+
+  /* =========================================================
+     今日の出題一覧（開始前プレビュー）
+  ========================================================= */
+
+  let pendingDailyIds = null;
+  let previewIds = [];
+
+  function onStartDailyClick() {
+    const daily = todaysDaily();
+    const started =
+      daily && Array.isArray(daily.answers) && daily.answers.length > 0;
+
+    if (started) {
+      startDaily();
+      return;
+    }
+
+    openDailyPreview(false);
+  }
+
+  function openDailyPreview(reroll) {
+    const daily = todaysDaily();
+    let ids;
+
+    if (
+      daily && !reroll &&
+      Array.isArray(daily.questionIds) && daily.questionIds.length
+    ) {
+      ids = daily.questionIds.filter(id => questionById(id));
+      pendingDailyIds = null;
+    } else {
+      if (reroll) state.daily = null;
+
+      ids = selectPrioritized(APP_CONFIG.dailyCount, [], "optimized-daily");
+      pendingDailyIds = ids;
+    }
+
+    if (!ids.length) {
+      showToast("出題できる問題がありません。", "error");
+      return;
+    }
+
+    previewIds = ids;
+    renderDailyPreview();
+    showScreen("dailyPreview");
+  }
+
+  function renderDailyPreview() {
+    const stats = loadQStats();
+    const attempts = loadAttempts();
+    const tally = { none: 0, confident: 0, normal: 0, review: 0, weak: 0 };
+
+    const rows = previewIds
+      .map((id, index) => {
+        const question = questionById(id);
+        if (!question) return "";
+
+        const level = effectiveConfidence(id, stats, attempts);
+        const count = level
+          ? Math.max(effectiveAnswerCount(id, stats, attempts), 1)
+          : 0;
+
+        tally[level || "none"] += 1;
+
+        const title =
+          question.question.length > 70
+            ? `${question.question.slice(0, 70)}…`
+            : question.question;
+
+        return `
+          <div class="preview-row">
+            <span class="preview-no">${index + 1}</span>
+            <div class="preview-body">
+              <p class="preview-title">${escapeHtml(title)}</p>
+              <p class="preview-sub">
+                ${escapeHtml(getSubjectName(question.subject))}
+                ／ ${escapeHtml(question.category || "その他")}
+              </p>
+            </div>
+            <div class="preview-meta">
+              ${confidenceChipHtml(level)}
+              <span class="preview-count">回答${count}回</span>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    document.getElementById("preview-title").textContent =
+      `今日の${previewIds.length}問`;
+
+    document.getElementById("preview-summary").textContent =
+      `未回答${tally.none}問 ／ 理解不足${tally.weak}問 ／ 要復習${tally.review}問 ／ 普通${tally.normal}問 ／ 自信あり${tally.confident}問`;
+
+    document.getElementById("preview-list").innerHTML = rows;
+  }
+
+  /* =========================================================
+     問題ごとの解説画像（その場でアップロード）
+  ========================================================= */
+
+  const QIMG_DB_NAME = "shindanshi-drill-qimages";
+  const QIMG_STORE = "qimages";
+  const MAX_QUESTION_IMAGES = 8;
+
+  let currentQImages = [];
+
+  function openQImgDB() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error("このブラウザではIndexedDBが利用できません。"));
+        return;
+      }
+
+      const request = indexedDB.open(QIMG_DB_NAME, 1);
+
+      request.onupgradeneeded = event => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains(QIMG_STORE)) {
+          db.createObjectStore(QIMG_STORE, { keyPath: "id" });
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () =>
+        reject(request.error || new Error("画像データベースを開けませんでした。"));
+    });
+  }
+
+  async function withQImgStore(mode, work) {
+    const db = await openQImgDB();
+
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(QIMG_STORE, mode);
+      const store = tx.objectStore(QIMG_STORE);
+      let result;
+
+      const request = work(store);
+      if (request) request.onsuccess = () => { result = request.result; };
+
+      tx.oncomplete = () => { db.close(); resolve(result); };
+      tx.onerror = tx.onabort = () => {
+        db.close();
+        reject(tx.error || new Error("画像データの処理に失敗しました。"));
+      };
+    });
+  }
+
+  function idbQImageGet(id) {
+    return withQImgStore("readonly", store => store.get(id));
+  }
+
+  function idbQImagePut(record) {
+    return withQImgStore("readwrite", store => store.put(record));
+  }
+
+  function idbQImageDelete(id) {
+    return withQImgStore("readwrite", store => store.delete(id));
+  }
+
+  async function idbQImagesAll() {
+    const list = await withQImgStore("readonly", store => store.getAll());
+    return Array.isArray(list) ? list : [];
+  }
+
+  function idbQImagesPutMany(list) {
+    return withQImgStore("readwrite", store => {
+      list.forEach(item => store.put(item));
+      return null;
+    });
+  }
+
+  function drawQuestionImages() {
+    const box = document.getElementById("question-images");
+    if (!box) return;
+
+    box.innerHTML = currentQImages
+      .map((src, index) => `
+        <div class="qimg">
+          <img src="${src}" alt="解説画像${index + 1}">
+          <button type="button" class="qimg-remove" data-remove="${index}" aria-label="画像を削除">×</button>
+        </div>
+      `)
+      .join("");
+  }
+
+  async function renderQuestionImages(question) {
+    currentQImages = [];
+    drawQuestionImages();
+    if (!question) return;
+
+    try {
+      const record = await idbQImageGet(question.id);
+
+      if (!lastResult || lastResult.question.id !== question.id) return;
+
+      currentQImages =
+        record && Array.isArray(record.images) ? record.images.slice() : [];
+      drawQuestionImages();
+    } catch (error) {
+      console.warn("解説画像の読み込みに失敗しました", error);
+    }
+  }
+
+  async function persistQuestionImages(questionId) {
+    if (!currentQImages.length) {
+      await idbQImageDelete(questionId);
+      return;
+    }
+
+    await idbQImagePut({
+      id: questionId,
+      images: currentQImages.slice(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  async function addQuestionImages(fileList) {
+    if (!lastResult) return;
+
+    const questionId = lastResult.question.id;
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+
+    try {
+      for (const file of files) {
+        if (currentQImages.length >= MAX_QUESTION_IMAGES) {
+          showToast(`画像は1問につき${MAX_QUESTION_IMAGES}枚までです。`, "info");
+          break;
+        }
+
+        currentQImages.push(await readImageAsDataUrl(file, 1800, 0.86));
+      }
+
+      await persistQuestionImages(questionId);
+
+      if (lastResult && lastResult.question.id === questionId) {
+        drawQuestionImages();
+      }
+
+      showToast("解説画像を保存しました。", "success");
+    } catch (error) {
+      console.error(error);
+      showToast(`画像の保存に失敗しました。${error.message}`, "error");
+    }
+  }
+
+  async function removeQuestionImage(index) {
+    if (!lastResult) return;
+
+    const confirmed = await confirmDialog(
+      "この画像を削除します。",
+      { title: "画像を削除しますか？", okLabel: "削除する" }
+    );
+
+    if (!confirmed) return;
+
+    currentQImages.splice(index, 1);
+
+    try {
+      await persistQuestionImages(lastResult.question.id);
+      drawQuestionImages();
+    } catch (error) {
+      console.error(error);
+      showToast(`削除に失敗しました。${error.message}`, "error");
+    }
+  }
+
   function buildWeakDrillIds(limit = 20) {
     const summary = Stats.summarize(questions, state);
 
@@ -1587,7 +1995,9 @@ const App = (() => {
           notes: loadNotes(),
           dailyLog: loadDailyLog(),
           materials: await idbMaterialsAll(),
-          attempts: loadAttempts()
+          attempts: loadAttempts(),
+          qstats: loadQStats(),
+          qimages: await idbQImagesAll()
         }
       };
 
@@ -1649,6 +2059,12 @@ const App = (() => {
       if (extras.dailyLog) saveDailyLog(extras.dailyLog);
       if (extras.attempts) {
         localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(extras.attempts));
+      }
+      if (extras.qstats) {
+        localStorage.setItem(QSTATS_KEY, JSON.stringify(extras.qstats));
+      }
+      if (Array.isArray(extras.qimages) && extras.qimages.length) {
+        await idbQImagesPutMany(extras.qimages);
       }
       if (Array.isArray(extras.materials) && extras.materials.length) {
         await idbMaterialsPutMany(extras.materials);
@@ -2081,11 +2497,15 @@ const App = (() => {
        */
       else {
         const ids =
-          selectPrioritized(
-            APP_CONFIG.dailyCount,
-            [],
-            "optimized-daily"
-          );
+          pendingDailyIds && pendingDailyIds.length
+            ? pendingDailyIds
+            : selectPrioritized(
+                APP_CONFIG.dailyCount,
+                [],
+                "optimized-daily"
+              );
+
+        pendingDailyIds = null;
 
         if (!ids.length) {
           showToast(
@@ -3022,6 +3442,8 @@ const App = (() => {
     ).textContent =
       question.question;
 
+    renderQuizConfidence(question.id);
+
     const choices =
       document.getElementById(
         "quiz-choices"
@@ -3118,6 +3540,7 @@ const App = (() => {
     updateStreak();
     incrementDailyLog();
     recordAttempt(submitted.question.id, submitted.result.isCorrect);
+    recordQuestionStat(submitted.question.id, submitted.result.isCorrect);
 
     const srsMapBefore = loadSrs();
     const previousEntry = srsMapBefore[submitted.question.id];
@@ -3234,7 +3657,7 @@ const App = (() => {
 
     badge.textContent =
       result.isCorrect
-        ? "正解"
+        ? "正解！"
         : "不正解";
 
     badge.className =
@@ -3249,7 +3672,12 @@ const App = (() => {
 
     document
       .querySelectorAll("#confidence-group .confidence-btn")
-      .forEach(button => button.classList.remove("selected"));
+      .forEach(button =>
+        button.classList.toggle(
+          "selected",
+          button.dataset.level === currentConfidenceLevel(question.id)
+        )
+      );
 
     const noteField = document.getElementById("explain-note");
     if (noteField) {
@@ -3496,6 +3924,7 @@ const App = (() => {
 
     renderFavoriteButton();
     renderRelatedMaterials(lastResult.question);
+    renderQuestionImages(lastResult.question);
     showScreen("explain");
   }
 
@@ -5141,7 +5570,7 @@ const App = (() => {
       )
       .addEventListener(
         "click",
-        startDaily
+        onStartDailyClick
       );
 
     document
@@ -5727,6 +6156,54 @@ const App = (() => {
       .getElementById("lightbox")
       .addEventListener("click", () => {
         document.getElementById("lightbox").hidden = true;
+      });
+
+
+    /*
+     * 出題一覧（開始前プレビュー）
+     */
+    document
+      .getElementById("btn-preview-back")
+      .addEventListener("click", () => {
+        pendingDailyIds = null;
+        renderHome();
+      });
+
+    document
+      .getElementById("btn-preview-start")
+      .addEventListener("click", startDaily);
+
+    document
+      .getElementById("btn-preview-reroll")
+      .addEventListener("click", () => openDailyPreview(true));
+
+    /*
+     * 問題ごとの解説画像
+     */
+    const qimgInput = document.getElementById("qimg-input");
+
+    document
+      .getElementById("btn-qimg-add")
+      .addEventListener("click", () => {
+        qimgInput.value = "";
+        qimgInput.click();
+      });
+
+    qimgInput.addEventListener("change", async event => {
+      await addQuestionImages(event.target.files);
+    });
+
+    document
+      .getElementById("question-images")
+      .addEventListener("click", event => {
+        const remove = event.target.closest("[data-remove]");
+        if (remove) {
+          removeQuestionImage(Number(remove.dataset.remove));
+          return;
+        }
+
+        const image = event.target.closest("img");
+        if (image) openLightbox(image.src);
       });
 
     loadMaterialsCache();
