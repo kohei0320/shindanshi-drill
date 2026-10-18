@@ -51,6 +51,8 @@ const App = (() => {
     materialView: document.getElementById("screen-material-view"),
     materialEdit: document.getElementById("screen-material-edit"),
     dailyPreview: document.getElementById("screen-daily-preview"),
+    mypage: document.getElementById("screen-mypage"),
+    confDetail: document.getElementById("screen-conf-detail"),
     quiz: document.getElementById("screen-quiz"),
     explain: document.getElementById("screen-explain"),
     result: document.getElementById("screen-result"),
@@ -85,7 +87,7 @@ const App = (() => {
     return `${y}-${m}-${d}`;
   }
 
-  const TAB_SCREENS = ["home", "subjects", "study", "materials"];
+  const TAB_SCREENS = ["home", "subjects", "study", "materials", "mypage"];
 
   function updateTabbar(name) {
     const bar = document.getElementById("tabbar");
@@ -1705,10 +1707,7 @@ const App = (() => {
             <span class="preview-no">${index + 1}</span>
             <div class="preview-body">
               <p class="preview-title">${escapeHtml(title)}</p>
-              <p class="preview-sub">
-                ${escapeHtml(getSubjectName(question.subject))}
-                ／ ${escapeHtml(question.category || "その他")}
-              </p>
+              <p class="preview-sub">${subjectChipHtml(question.subject)}<span class="cat-text">${escapeHtml(question.category || "その他")}</span></p>
             </div>
             <div class="preview-meta">
               ${confidenceChipHtml(level)}
@@ -1897,6 +1896,319 @@ const App = (() => {
       console.error(error);
       showToast(`削除に失敗しました。${error.message}`, "error");
     }
+  }
+
+
+  /* =========================================================
+     科目カラー／出題画面のメタ表示
+  ========================================================= */
+
+  function subjectIndex(subjectId) {
+    const index = APP_CONFIG.subjects.findIndex(item => item.id === subjectId);
+    return index < 0 ? 0 : index % 7;
+  }
+
+  function subjectChipHtml(subjectId, large) {
+    return `<span class="subj-chip${large ? " subj-chip-lg" : ""}" data-i="${subjectIndex(subjectId)}">${escapeHtml(getSubjectName(subjectId))}</span>`;
+  }
+
+  function renderQuizMeta(question) {
+    const meta = document.getElementById("quiz-meta");
+    const card = document.querySelector("#screen-quiz .quiz-card");
+    if (!meta) return;
+
+    const level = Math.min(3, Math.max(1, Number(question.difficulty) || 2));
+    const stars = "★".repeat(level) + "☆".repeat(3 - level);
+
+    meta.innerHTML =
+      subjectChipHtml(question.subject, true) +
+      `<span class="cat-chip">${escapeHtml(question.category || "その他")}</span>` +
+      `<span class="diff-chip" title="難易度${level}">${stars}</span>`;
+
+    if (card) card.dataset.i = String(subjectIndex(question.subject));
+  }
+
+  /* =========================================================
+     ホーム：あいさつ／今週／試験日／目標
+  ========================================================= */
+
+  const EXAM_KEY = "shindanshi_drill_exam_date";
+  const CONF_COUNT_KEY = "shindanshi_drill_conf_count";
+
+  function renderGreeting() {
+    const el = document.getElementById("greeting");
+    if (!el) return;
+
+    const hour = new Date().getHours();
+
+    el.textContent =
+      hour < 5 ? "夜更かしおつかれさま 🌙" :
+      hour < 11 ? "おはようございます ☀️" :
+      hour < 17 ? "こんにちは 📖" :
+      hour < 22 ? "こんばんは 🌆" :
+      "今日もおつかれさま 🌙";
+  }
+
+  function renderWeekStrip() {
+    const box = document.getElementById("week-strip");
+    if (!box) return;
+
+    const log = loadDailyLog();
+    const goal = Number(APP_CONFIG.dailyCount) || 20;
+    const names = ["日", "月", "火", "水", "木", "金", "土"];
+    const days = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+
+      const key = dateKeyOffset(-i);
+
+      days.push({
+        count: log[key] || 0,
+        name: names[date.getDay()],
+        today: i === 0
+      });
+    }
+
+    const max = Math.max(goal, ...days.map(day => day.count));
+    const total = days.reduce((sum, day) => sum + day.count, 0);
+    const active = days.filter(day => day.count > 0).length;
+
+    box.innerHTML =
+      `<div class="week-bars">` +
+      days.map(day => {
+        const pct = day.count ? Math.max(8, Math.round((day.count / max) * 100)) : 0;
+
+        return `
+          <div class="week-day${day.today ? " is-today" : ""}${day.count >= goal ? " is-goal" : ""}">
+            <span class="week-count">${day.count || ""}</span>
+            <span class="week-bar"><i style="height:${pct}%"></i></span>
+            <span class="week-name">${day.name}</span>
+          </div>`;
+      }).join("") +
+      `</div>` +
+      `<p class="week-total">今週 <strong>${total}</strong>問 ／ <strong>${active}</strong>日学習</p>`;
+  }
+
+  function renderExamCard() {
+    const daysEl = document.getElementById("exam-days");
+    const subEl = document.getElementById("exam-sub");
+    const input = document.getElementById("exam-date-input");
+    if (!daysEl || !subEl || !input) return;
+
+    const value = localStorage.getItem(EXAM_KEY) || "";
+    input.value = value;
+
+    if (!value) {
+      daysEl.textContent = "未設定";
+      subEl.textContent = "タップして試験日を設定";
+      return;
+    }
+
+    const target = new Date(`${value}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const diff = Math.round((target - today) / 86400000);
+
+    if (diff < 0) {
+      daysEl.textContent = "終了";
+      subEl.textContent = "タップして次の試験日を設定";
+      return;
+    }
+
+    daysEl.innerHTML =
+      diff === 0 ? "今日！" : `あと<span class="exam-num">${diff}</span>日`;
+
+    const stats = loadQStats();
+    const attempts = loadAttempts();
+    const unanswered = questions.filter(
+      question => !effectiveConfidence(question.id, stats, attempts)
+    ).length;
+
+    subEl.textContent =
+      diff > 0 && unanswered
+        ? `未回答${unanswered}問 ／ 1日${Math.ceil(unanswered / diff)}問ペースで一巡`
+        : "全問に一度は挑戦済み。復習で仕上げよう";
+  }
+
+  function renderMilestone() {
+    const totalEl = document.getElementById("stat-total");
+    const fill = document.getElementById("milestone-bar-fill");
+    if (!totalEl || !fill) return;
+
+    const total = Number(
+      (totalEl.textContent.replace(/,/g, "").match(/\d+/) || [0])[0]
+    );
+
+    const steps = [50, 100, 300, 500, 1000, 2000, 3000, 5000, 10000];
+    const next =
+      steps.find(step => step > total) ||
+      Math.ceil((total + 1) / 5000) * 5000;
+    const previous = steps.filter(step => step <= total).pop() || 0;
+    const pct = Math.round(((total - previous) / (next - previous)) * 100);
+
+    fill.style.width = `${Math.max(3, pct)}%`;
+    document.getElementById("milestone-target").textContent = `${next}問`;
+    document.getElementById("milestone-text").textContent =
+      `あと${next - total}問で達成`;
+  }
+
+  /* =========================================================
+     自信度別の集計と、そこからの演習
+  ========================================================= */
+
+  let confDetailLevel = "weak";
+  let confDetailCount = Number(localStorage.getItem(CONF_COUNT_KEY)) || 30;
+
+  const CONF_ORDER = ["weak", "review", "normal", "confident", "none"];
+
+  function confLevelMeta(level) {
+    return level === "none"
+      ? { id: "none", label: "未回答", icon: "🆕" }
+      : confidenceMeta(level);
+  }
+
+  function computeConfidenceBuckets() {
+    const stats = loadQStats();
+    const attempts = loadAttempts();
+    const buckets = { weak: [], review: [], normal: [], confident: [], none: [] };
+
+    questions.forEach(question => {
+      const level = effectiveConfidence(question.id, stats, attempts);
+      buckets[level || "none"].push(question.id);
+    });
+
+    return buckets;
+  }
+
+  function renderConfidenceSummary() {
+    const box = document.getElementById("conf-summary");
+    if (!box) return;
+
+    const buckets = computeConfidenceBuckets();
+    const total = questions.length || 1;
+
+    const stack = CONF_ORDER
+      .map(level =>
+        `<i class="conf-seg" data-level="${level}" style="width:${(buckets[level].length / total) * 100}%"></i>`
+      )
+      .join("");
+
+    const rows = CONF_ORDER
+      .map(level => {
+        const meta = confLevelMeta(level);
+        const count = buckets[level].length;
+        const pct = Math.round((count / total) * 100);
+
+        return `
+          <button type="button" class="conf-row" data-level="${level}">
+            <span class="conf-row-icon">${meta.icon}</span>
+            <span class="conf-row-label">${meta.label}</span>
+            <span class="conf-row-pct">${pct}%</span>
+            <span class="conf-row-count">${count}<small>問</small></span>
+            <span class="conf-row-arrow">›</span>
+          </button>`;
+      })
+      .join("");
+
+    box.innerHTML =
+      `<div class="conf-stack">${stack}</div><div class="conf-rows">${rows}</div>`;
+  }
+
+  function renderConfidenceDetail() {
+    const buckets = computeConfidenceBuckets();
+    const ids = buckets[confDetailLevel] || [];
+    const meta = confLevelMeta(confDetailLevel);
+
+    document.getElementById("conf-detail-title").textContent =
+      `${meta.icon} ${meta.label}`;
+
+    document.getElementById("conf-detail-sub").textContent =
+      ids.length
+        ? `${ids.length}問が対象です。件数を選んで演習できます。`
+        : "対象の問題はありません。";
+
+    document
+      .querySelectorAll("#conf-count-picker .count-chip")
+      .forEach(chip => {
+        chip.classList.toggle(
+          "selected",
+          Number(chip.dataset.count) === confDetailCount
+        );
+      });
+
+    const start = document.getElementById("btn-conf-start");
+    start.disabled = ids.length === 0;
+    start.textContent = ids.length
+      ? `${Math.min(confDetailCount, ids.length)}問を解く`
+      : "対象の問題がありません";
+
+    const stats = loadQStats();
+    const attempts = loadAttempts();
+    const LIMIT = 150;
+
+    const rows = ids
+      .slice(0, LIMIT)
+      .map(id => {
+        const question = questionById(id);
+        if (!question) return "";
+
+        const level = effectiveConfidence(id, stats, attempts);
+        const count = level
+          ? Math.max(effectiveAnswerCount(id, stats, attempts), 1)
+          : 0;
+
+        const title =
+          question.question.length > 70
+            ? `${question.question.slice(0, 70)}…`
+            : question.question;
+
+        return `
+          <button type="button" class="preview-row is-button" data-id="${escapeHtml(id)}">
+            <span class="preview-no subj-dot" data-i="${subjectIndex(question.subject)}"></span>
+            <div class="preview-body">
+              <p class="preview-title">${escapeHtml(title)}</p>
+              <p class="preview-sub">${subjectChipHtml(question.subject)}<span class="cat-text">${escapeHtml(question.category || "その他")}</span></p>
+            </div>
+            <div class="preview-meta">
+              <span class="preview-count">回答${count}回</span>
+            </div>
+          </button>`;
+      })
+      .join("");
+
+    document.getElementById("conf-detail-list").innerHTML =
+      rows +
+      (ids.length > LIMIT
+        ? `<p class="note">ほか${ids.length - LIMIT}問（演習には全件が対象になります）</p>`
+        : "");
+  }
+
+  function openConfidenceDetail(level) {
+    confDetailLevel = level;
+    renderConfidenceDetail();
+    showScreen("confDetail");
+  }
+
+  function startConfidenceSession() {
+    const pool = computeConfidenceBuckets()[confDetailLevel] || [];
+    const ids = shuffleArray(pool).slice(0, confDetailCount);
+
+    if (!ids.length) {
+      showToast("対象の問題がありません。", "info");
+      return;
+    }
+
+    const started = Quiz.start("confidence", ids, null);
+
+    if (!started || !Quiz.currentQuestion()) {
+      showToast("演習を開始できませんでした。", "error");
+      return;
+    }
+
+    renderQuiz();
   }
 
   function buildWeakDrillIds(limit = 20) {
@@ -3288,6 +3600,16 @@ const App = (() => {
 
     renderHeatmap();
 
+    renderGreeting();
+
+    renderWeekStrip();
+
+    renderExamCard();
+
+    renderMilestone();
+
+    renderConfidenceSummary();
+
     /*
      * Daily未完了
      */
@@ -3425,17 +3747,7 @@ const App = (() => {
         )}%`;
     }
 
-    document.getElementById(
-      "quiz-meta"
-    ).textContent =
-      `${getSubjectName(
-        question.subject
-      )} ／ ${
-        question.category ||
-        "その他"
-      } ／ 難易度${
-        question.difficulty
-      }`;
+    renderQuizMeta(question);
 
     document.getElementById(
       "quiz-question"
@@ -6205,6 +6517,58 @@ const App = (() => {
         const image = event.target.closest("img");
         if (image) openLightbox(image.src);
       });
+
+
+    /*
+     * 自信度別の集計
+     */
+    document
+      .getElementById("conf-summary")
+      .addEventListener("click", event => {
+        const row = event.target.closest(".conf-row");
+        if (row) openConfidenceDetail(row.dataset.level);
+      });
+
+    document
+      .getElementById("btn-conf-back")
+      .addEventListener("click", () => switchTab("study"));
+
+    document
+      .getElementById("conf-count-picker")
+      .addEventListener("click", event => {
+        const chip = event.target.closest("[data-count]");
+        if (!chip) return;
+
+        confDetailCount = Number(chip.dataset.count);
+        localStorage.setItem(CONF_COUNT_KEY, String(confDetailCount));
+        renderConfidenceDetail();
+      });
+
+    document
+      .getElementById("btn-conf-start")
+      .addEventListener("click", startConfidenceSession);
+
+    document
+      .getElementById("conf-detail-list")
+      .addEventListener("click", event => {
+        const row = event.target.closest("[data-id]");
+        if (row) startFavoriteSession([row.dataset.id]);
+      });
+
+    /*
+     * 試験日
+     */
+    const examInput = document.getElementById("exam-date-input");
+
+    examInput.addEventListener("change", () => {
+      if (examInput.value) {
+        localStorage.setItem(EXAM_KEY, examInput.value);
+      } else {
+        localStorage.removeItem(EXAM_KEY);
+      }
+
+      renderExamCard();
+    });
 
     loadMaterialsCache();
   }
