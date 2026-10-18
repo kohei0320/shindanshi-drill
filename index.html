@@ -619,6 +619,30 @@
        QUIZ
        ========================= -->
 
+  <section id="screen-daily-preview" class="screen" hidden>
+
+    <div class="quiz-top">
+      <button id="btn-preview-back" class="text-btn" type="button">ホーム</button>
+      <p class="progress">出題一覧</p>
+      <span></span>
+    </div>
+
+    <div class="page-heading">
+      <p class="section-kicker">TODAY'S SET</p>
+      <h2 id="preview-title">今日の問題</h2>
+      <p id="preview-summary"></p>
+    </div>
+
+    <div id="preview-list" class="preview-list"></div>
+
+    <div class="sticky-actions">
+      <button id="btn-preview-start" class="btn primary" type="button">この内容で開始</button>
+      <button id="btn-preview-reroll" class="btn" type="button">🔀 出題を選び直す</button>
+    </div>
+
+  </section>
+
+
   <section
     id="screen-quiz"
     class="screen"
@@ -665,6 +689,8 @@
         class="meta"
       ></p>
 
+      <p id="quiz-confidence" class="quiz-confidence"></p>
+
       <h2
         id="quiz-question"
         class="question"
@@ -708,33 +734,25 @@
 
     <div id="confidence-group" class="confidence-group">
       <p class="confidence-label">
-        この問題への自信は？（復習間隔に反映されます）
+        この問題への自信は？（正解→普通／不正解→理解不足に自動設定。タップで変更できます）
       </p>
 
       <div class="confidence-buttons">
 
-        <button
-          type="button"
-          class="confidence-btn"
-          data-level="guess"
-        >
-          🎲 勘
+        <button type="button" class="confidence-btn" data-level="confident">
+          <span class="cb-icon">💪</span><span>自信あり</span>
         </button>
 
-        <button
-          type="button"
-          class="confidence-btn"
-          data-level="normal"
-        >
-          🤔 普通
+        <button type="button" class="confidence-btn" data-level="normal">
+          <span class="cb-icon">🙂</span><span>普通</span>
         </button>
 
-        <button
-          type="button"
-          class="confidence-btn"
-          data-level="confident"
-        >
-          💪 自信あり
+        <button type="button" class="confidence-btn" data-level="review">
+          <span class="cb-icon">🔁</span><span>要復習</span>
+        </button>
+
+        <button type="button" class="confidence-btn" data-level="weak">
+          <span class="cb-icon">😣</span><span>理解不足</span>
         </button>
 
       </div>
@@ -752,6 +770,14 @@
         class="explanation"
       ></p>
 
+    </div>
+
+
+    <div id="question-images-section" class="explain-section">
+      <h3 class="explain-title">🖼 解説画像（AI解説・テキスト画像）</h3>
+      <div id="question-images" class="qimg-list"></div>
+      <button id="btn-qimg-add" class="btn" type="button">＋ 画像を追加（この問題に保存）</button>
+      <input id="qimg-input" type="file" accept="image/*" multiple hidden>
     </div>
 
 
