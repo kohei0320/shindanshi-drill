@@ -45,6 +45,11 @@ const App = (() => {
     favorites: document.getElementById("screen-favorites"),
     notes: document.getElementById("screen-notes"),
     flashcards: document.getElementById("screen-flashcards"),
+    subjects: document.getElementById("screen-subjects"),
+    study: document.getElementById("screen-study"),
+    materials: document.getElementById("screen-materials"),
+    materialView: document.getElementById("screen-material-view"),
+    materialEdit: document.getElementById("screen-material-edit"),
     quiz: document.getElementById("screen-quiz"),
     explain: document.getElementById("screen-explain"),
     result: document.getElementById("screen-result"),
@@ -79,11 +84,27 @@ const App = (() => {
     return `${y}-${m}-${d}`;
   }
 
+  const TAB_SCREENS = ["home", "subjects", "study", "materials"];
+
+  function updateTabbar(name) {
+    const bar = document.getElementById("tabbar");
+    if (!bar) return;
+
+    const visible = TAB_SCREENS.includes(name);
+    bar.hidden = !visible;
+    document.body.classList.toggle("has-tabbar", visible);
+
+    bar.querySelectorAll(".tab").forEach(tab => {
+      tab.classList.toggle("active", tab.dataset.tab === name);
+    });
+  }
+
   function showScreen(name) {
     Object.keys(screens).forEach(key => {
       screens[key].hidden = key !== name;
     });
 
+    updateTabbar(name);
     window.scrollTo(0, 0);
   }
 
@@ -799,6 +820,677 @@ const App = (() => {
      弱点だけで自動ドリル
   ========================================================= */
 
+
+  /* =========================================================
+     出題の優先順位づけ
+     1) 未回答 → 2) 直近3回で1回でも誤答 / 長期間未回答
+  ========================================================= */
+
+  const ATTEMPTS_KEY = "shindanshi_drill_attempts";
+
+  function loadAttempts() {
+    try {
+      const raw = localStorage.getItem(ATTEMPTS_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function recordAttempt(questionId, isCorrect) {
+    if (!questionId) return;
+
+    try {
+      const map = loadAttempts();
+      const list = Array.isArray(map[questionId]) ? map[questionId] : [];
+
+      list.push([Date.now(), isCorrect ? 1 : 0]);
+      map[questionId] = list.slice(-5);
+
+      localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(map));
+    } catch (error) {
+      console.warn("回答履歴の保存に失敗しました", error);
+    }
+  }
+
+  function toTimestamp(value) {
+    if (typeof value === "number" && isFinite(value)) return value;
+    if (typeof value === "string") {
+      const t = Date.parse(value);
+      return isNaN(t) ? null : t;
+    }
+    return null;
+  }
+
+  /*
+   * Storage側の履歴の形式に依存しないよう、
+   * 取得できる情報だけを防御的に読み取る。
+   */
+  function parseHistoryEntry(entry) {
+    if (!entry) return { answered: false, recent: [], lastTs: null };
+
+    let items = Array.isArray(entry) ? entry : null;
+
+    if (!items && typeof entry === "object") {
+      for (const key of ["attempts", "log", "logs", "results", "records", "answers", "history"]) {
+        if (Array.isArray(entry[key])) {
+          items = entry[key];
+          break;
+        }
+      }
+    }
+
+    if (items && items.length) {
+      const flags = items
+        .map(item => {
+          if (typeof item === "boolean") return item;
+          if (item && typeof item === "object") {
+            for (const key of ["isCorrect", "correct", "ok"]) {
+              if (typeof item[key] === "boolean") return item[key];
+            }
+          }
+          return null;
+        })
+        .filter(flag => flag !== null);
+
+      const lastItem = items[items.length - 1];
+      const lastTs =
+        lastItem && typeof lastItem === "object"
+          ? toTimestamp(
+              lastItem.at ?? lastItem.date ?? lastItem.timestamp ??
+              lastItem.answeredAt ?? lastItem.time
+            )
+          : null;
+
+      return { answered: true, recent: flags.slice(-3), lastTs };
+    }
+
+    if (typeof entry === "object") {
+      const num = value => (typeof value === "number" ? value : 0);
+
+      const wrong =
+        num(entry.wrong) + num(entry.incorrect) +
+        num(entry.wrongCount) + num(entry.incorrectCount);
+      const correct = num(entry.correct) + num(entry.correctCount);
+      const total = num(entry.total) || num(entry.count) || correct + wrong;
+
+      let recent = [];
+      if (typeof entry.lastCorrect === "boolean") {
+        recent = [entry.lastCorrect];
+      } else if (wrong > 0 && (total <= 3 || wrong / Math.max(total, 1) >= 0.3)) {
+        recent = [false];
+      }
+
+      const lastTs = toTimestamp(
+        entry.lastAnsweredAt ?? entry.lastAnswered ?? entry.lastAt ??
+        entry.last ?? entry.updatedAt ?? entry.date ?? entry.timestamp
+      );
+
+      return { answered: true, recent, lastTs };
+    }
+
+    return { answered: true, recent: [], lastTs: null };
+  }
+
+  function questionStudyInfo(id, attempts) {
+    const log = attempts[id];
+
+    if (Array.isArray(log) && log.length) {
+      return {
+        answered: true,
+        recent: log.slice(-3).map(item => item[1] === 1),
+        lastTs: log[log.length - 1][0]
+      };
+    }
+
+    return parseHistoryEntry(state.history ? state.history[id] : null);
+  }
+
+  function selectPrioritized(count, excludeIds, fallbackStrategy) {
+    const limit = Math.max(1, Number(count) || 20);
+    const exclude = new Set(excludeIds || []);
+    const attempts = loadAttempts();
+    const now = Date.now();
+    const todayStart = new Date().setHours(0, 0, 0, 0);
+
+    const unanswered = [];
+    const answered = [];
+
+    questions.forEach(question => {
+      if (exclude.has(question.id)) return;
+
+      const info = questionStudyInfo(question.id, attempts);
+
+      if (!info.answered) {
+        unanswered.push(question.id);
+        return;
+      }
+
+      const days = info.lastTs
+        ? Math.max(0, (now - info.lastTs) / 86400000)
+        : 14;
+
+      const missed = info.recent.some(flag => flag === false);
+      const answeredToday = info.lastTs !== null && info.lastTs >= todayStart;
+
+      answered.push({
+        id: question.id,
+        score:
+          (missed ? 100 : 0) +
+          Math.min(days, 60) +
+          Math.random() * 5 -
+          (answeredToday ? 1000 : 0)
+      });
+    });
+
+    const picked = shuffleArray(unanswered).slice(0, limit);
+
+    if (picked.length < limit) {
+      answered
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit - picked.length)
+        .forEach(item => picked.push(item.id));
+    }
+
+    if (!picked.length) {
+      return Selector.selectQuestionIds(
+        questions,
+        state.history,
+        {
+          count: limit,
+          strategy: fallbackStrategy,
+          filters: {},
+          excludeIds: Array.from(exclude)
+        }
+      );
+    }
+
+    return shuffleArray(picked);
+  }
+
+
+  /* =========================================================
+     ホーム：今日の進捗リング／紙吹雪
+  ========================================================= */
+
+  function renderTodayHero() {
+    const ring = document.getElementById("today-ring");
+    const text = document.getElementById("stat-today");
+    if (!ring || !text) return;
+
+    const match = text.textContent.match(/(\d+)\s*\/\s*(\d+)/);
+    const done = match ? Number(match[1]) : 0;
+    const total = match ? Number(match[2]) : 0;
+    const goal = total || Number(APP_CONFIG.dailyCount) || 20;
+    const pct = Math.min(100, Math.round((done / goal) * 100));
+
+    ring.style.setProperty("--pct", String(pct));
+    document.getElementById("today-ring-count").textContent = String(done);
+    document.getElementById("today-ring-total").textContent = `/ ${goal}`;
+
+    const sub = document.getElementById("today-hero-sub");
+    if (sub) {
+      sub.textContent =
+        pct >= 100 ? "今日の目標を達成！おつかれさま 🎉" :
+        done > 0 ? `あと${goal - done}問で達成` :
+        "まずは1問から始めよう";
+    }
+  }
+
+  function launchConfetti() {
+    if (
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) return;
+
+    const layer = document.createElement("div");
+    layer.className = "confetti-layer";
+
+    const colors = ["#c98a2b", "#2f7d5c", "#2d4a8a", "#b23a3a", "#e0a640"];
+
+    for (let i = 0; i < 48; i++) {
+      const piece = document.createElement("i");
+      piece.style.left = `${Math.random() * 100}%`;
+      piece.style.background = colors[i % colors.length];
+      piece.style.animationDelay = `${Math.random() * 0.6}s`;
+      piece.style.animationDuration = `${1.8 + Math.random() * 1.4}s`;
+      piece.style.setProperty("--dx", `${Math.random() * 120 - 60}px`);
+      layer.appendChild(piece);
+    }
+
+    document.body.appendChild(layer);
+    window.setTimeout(() => layer.remove(), 4200);
+  }
+
+  /* =========================================================
+     教材ライブラリ（解説画像＋テキスト）
+  ========================================================= */
+
+  const MATERIAL_DB_NAME = "shindanshi-drill-materials";
+  const MATERIAL_STORE = "materials";
+  const MAX_MATERIAL_IMAGES = 12;
+
+  let materials = [];
+  let editingMaterialId = null;
+  let editingMaterialImages = [];
+  let viewingMaterialId = null;
+  let materialReturnScreen = "materials";
+
+  function openMaterialDB() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error("このブラウザではIndexedDBが利用できません。"));
+        return;
+      }
+
+      const request = indexedDB.open(MATERIAL_DB_NAME, 1);
+
+      request.onupgradeneeded = event => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains(MATERIAL_STORE)) {
+          db.createObjectStore(MATERIAL_STORE, { keyPath: "id" });
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () =>
+        reject(request.error || new Error("教材データベースを開けませんでした。"));
+    });
+  }
+
+  async function withMaterialStore(mode, work) {
+    const db = await openMaterialDB();
+
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(MATERIAL_STORE, mode);
+      const store = tx.objectStore(MATERIAL_STORE);
+      let result;
+
+      const request = work(store);
+      if (request) request.onsuccess = () => { result = request.result; };
+
+      tx.oncomplete = () => { db.close(); resolve(result); };
+      tx.onerror = tx.onabort = () => {
+        db.close();
+        reject(tx.error || new Error("教材データの処理に失敗しました。"));
+      };
+    });
+  }
+
+  async function idbMaterialsAll() {
+    const list = await withMaterialStore("readonly", store => store.getAll());
+    return Array.isArray(list) ? list : [];
+  }
+
+  function idbMaterialPut(material) {
+    return withMaterialStore("readwrite", store => store.put(material));
+  }
+
+  function idbMaterialDelete(id) {
+    return withMaterialStore("readwrite", store => store.delete(id));
+  }
+
+  function idbMaterialsPutMany(list) {
+    return withMaterialStore("readwrite", store => {
+      list.forEach(item => store.put(item));
+      return null;
+    });
+  }
+
+  async function loadMaterialsCache() {
+    try {
+      const list = await idbMaterialsAll();
+      materials = list.sort((a, b) =>
+        String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
+      );
+    } catch (error) {
+      console.warn("教材の読み込みに失敗しました", error);
+      materials = [];
+    }
+  }
+
+  function materialCategories(material) {
+    return String(material.category || "")
+      .split(/[、,，\n]/)
+      .map(item => item.trim())
+      .filter(Boolean);
+  }
+
+  function materialMatchesQuestion(material, question) {
+    if (material.subject !== question.subject) return false;
+
+    const cats = materialCategories(material);
+    return !cats.length || cats.includes(question.category || "その他");
+  }
+
+  function renderRelatedMaterials(question) {
+    const section = document.getElementById("related-materials-section");
+    const box = document.getElementById("related-materials");
+    if (!section || !box || !question) return;
+
+    const related = materials.filter(item =>
+      materialMatchesQuestion(item, question)
+    );
+
+    section.hidden = related.length === 0;
+
+    box.innerHTML = related
+      .map(item => `
+        <button class="material-chip" type="button" data-id="${escapeHtml(item.id)}">
+          <span class="material-chip-title">${escapeHtml(item.title)}</span>
+          <span class="material-chip-meta">
+            ${(item.images || []).length ? `🖼 ${(item.images || []).length}枚` : "📄 テキスト"}
+          </span>
+        </button>
+      `)
+      .join("");
+  }
+
+  async function openMaterials() {
+    await loadMaterialsCache();
+
+    const empty = document.getElementById("materials-empty");
+    const list = document.getElementById("materials-list");
+
+    empty.hidden = materials.length > 0;
+
+    list.innerHTML = APP_CONFIG.subjects
+      .map(subject => {
+        const items = materials.filter(item => item.subject === subject.id);
+        if (!items.length) return "";
+
+        return `
+          <div class="material-group">
+            <h3 class="material-group-title">${escapeHtml(subject.name)}</h3>
+            ${items.map(item => `
+              <button class="material-item" type="button" data-id="${escapeHtml(item.id)}">
+                <span class="material-item-title">${escapeHtml(item.title)}</span>
+                <span class="material-item-meta">
+                  ${escapeHtml(materialCategories(item).join("・") || "科目全体")}
+                  ${(item.images || []).length ? ` ／ 🖼 ${(item.images || []).length}枚` : ""}
+                </span>
+              </button>
+            `).join("")}
+          </div>
+        `;
+      })
+      .join("");
+
+    showScreen("materials");
+  }
+
+  function renderMaterialBody(text) {
+    const inline = value =>
+      escapeHtml(value).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+    let html = "";
+    let inList = false;
+
+    const closeList = () => {
+      if (inList) { html += "</ul>"; inList = false; }
+    };
+
+    String(text || "").split("\n").forEach(raw => {
+      const line = raw.trimEnd();
+
+      if (!line.trim()) { closeList(); return; }
+
+      if (/^#{1,3}\s+/.test(line)) {
+        closeList();
+        html += `<h4>${inline(line.replace(/^#{1,3}\s+/, ""))}</h4>`;
+        return;
+      }
+
+      if (/^[-・●*]\s+/.test(line)) {
+        if (!inList) { html += "<ul>"; inList = true; }
+        html += `<li>${inline(line.replace(/^[-・●*]\s+/, ""))}</li>`;
+        return;
+      }
+
+      closeList();
+      html += `<p>${inline(line)}</p>`;
+    });
+
+    closeList();
+    return html;
+  }
+
+  function openMaterialView(id, returnTo) {
+    const material = materials.find(item => item.id === id);
+    if (!material) return;
+
+    viewingMaterialId = id;
+    materialReturnScreen = returnTo || "materials";
+
+    document.getElementById("material-view-title").textContent = material.title;
+    document.getElementById("material-view-meta").textContent =
+      `${getSubjectName(material.subject)} ／ ${materialCategories(material).join("・") || "科目全体"}`;
+
+    document.getElementById("material-view-images").innerHTML =
+      (material.images || [])
+        .map((src, index) =>
+          `<img class="material-image" src="${src}" alt="${escapeHtml(material.title)} ${index + 1}">`
+        )
+        .join("");
+
+    document.getElementById("material-view-body").innerHTML =
+      renderMaterialBody(material.body);
+
+    const related = questions.filter(q => materialMatchesQuestion(material, q));
+    const quizButton = document.getElementById("btn-material-quiz");
+    quizButton.disabled = related.length === 0;
+    quizButton.textContent = related.length
+      ? `この教材に関連する問題を解く（${Math.min(related.length, 20)}問）`
+      : "関連する問題がありません";
+
+    showScreen("materialView");
+  }
+
+  function closeMaterialView() {
+    if (materialReturnScreen === "explain" && lastResult) {
+      showScreen("explain");
+    } else {
+      openMaterials();
+    }
+  }
+
+  function startMaterialQuiz() {
+    const material = materials.find(item => item.id === viewingMaterialId);
+    if (!material) return;
+
+    const ids = shuffleArray(
+      questions.filter(q => materialMatchesQuestion(material, q)).map(q => q.id)
+    ).slice(0, 20);
+
+    if (!ids.length) {
+      showToast("関連する問題がありません。", "info");
+      return;
+    }
+
+    const started = Quiz.start("material", ids, null);
+
+    if (!started || !Quiz.currentQuestion()) {
+      showToast("演習を開始できませんでした。", "error");
+      return;
+    }
+
+    renderQuiz();
+  }
+
+  function renderEditorImages() {
+    document.getElementById("material-image-previews").innerHTML =
+      editingMaterialImages
+        .map((src, index) => `
+          <div class="material-preview">
+            <img src="${src}" alt="画像${index + 1}">
+            <button type="button" class="material-preview-remove" data-remove="${index}" aria-label="画像を削除">×</button>
+          </div>
+        `)
+        .join("");
+  }
+
+  function openMaterialEditor(id) {
+    const material = id ? materials.find(item => item.id === id) : null;
+
+    editingMaterialId = material ? material.id : null;
+    editingMaterialImages = material ? (material.images || []).slice() : [];
+
+    const subjectSelect = document.getElementById("material-subject");
+    subjectSelect.innerHTML = APP_CONFIG.subjects
+      .map(subject =>
+        `<option value="${escapeHtml(subject.id)}">${escapeHtml(subject.name)}</option>`
+      )
+      .join("");
+
+    document.getElementById("material-edit-heading").textContent =
+      material ? "教材を編集" : "新しい教材";
+
+    document.getElementById("material-title").value = material ? material.title : "";
+    subjectSelect.value = material ? material.subject : (APP_CONFIG.subjects[0]?.id || "");
+    document.getElementById("material-category").value = material ? (material.category || "") : "";
+    document.getElementById("material-body").value = material ? (material.body || "") : "";
+    document.getElementById("btn-material-delete").hidden = !material;
+
+    renderEditorImages();
+    showScreen("materialEdit");
+  }
+
+  function readImageAsDataUrl(file, maxSide = 1600, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onerror = () => reject(new Error("画像を読み込めませんでした。"));
+      reader.onload = () => {
+        const image = new Image();
+
+        image.onerror = () => reject(new Error("対応していない画像形式です。"));
+        image.onload = () => {
+          const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+          const width = Math.max(1, Math.round(image.width * scale));
+          const height = Math.max(1, Math.round(image.height * scale));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+
+          const context = canvas.getContext("2d");
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, width, height);
+          context.drawImage(image, 0, 0, width, height);
+
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+
+        image.src = reader.result;
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function addEditorImages(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+
+    try {
+      for (const file of files) {
+        if (editingMaterialImages.length >= MAX_MATERIAL_IMAGES) {
+          showToast(`画像は1教材につき${MAX_MATERIAL_IMAGES}枚までです。`, "info");
+          break;
+        }
+
+        editingMaterialImages.push(await readImageAsDataUrl(file));
+      }
+
+      renderEditorImages();
+    } catch (error) {
+      console.error(error);
+      showToast(error.message, "error");
+    }
+  }
+
+  async function saveMaterialFromForm() {
+    const title = document.getElementById("material-title").value.trim();
+    const subject = document.getElementById("material-subject").value;
+    const category = document.getElementById("material-category").value.trim();
+    const body = document.getElementById("material-body").value.trim();
+
+    if (!title) { showToast("タイトルを入力してください。", "error"); return; }
+    if (!subject) { showToast("科目を選択してください。", "error"); return; }
+    if (!body && !editingMaterialImages.length) {
+      showToast("画像かテキストのどちらかは入力してください。", "error");
+      return;
+    }
+
+    const existing = editingMaterialId
+      ? materials.find(item => item.id === editingMaterialId)
+      : null;
+
+    const now = new Date().toISOString();
+
+    const material = {
+      id: existing
+        ? existing.id
+        : `m_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      title,
+      subject,
+      category,
+      body,
+      images: editingMaterialImages.slice(),
+      createdAt: existing ? existing.createdAt : now,
+      updatedAt: now
+    };
+
+    try {
+      await idbMaterialPut(material);
+      await loadMaterialsCache();
+      showToast("教材を保存しました。", "success");
+      openMaterialView(material.id, "materials");
+    } catch (error) {
+      console.error(error);
+      showToast(`教材の保存に失敗しました。${error.message}`, "error");
+    }
+  }
+
+  async function deleteEditingMaterial() {
+    if (!editingMaterialId) return;
+
+    const confirmed = await confirmDialog(
+      "この教材（画像・テキスト）を削除します。この操作は元に戻せません。",
+      { title: "教材を削除しますか？", okLabel: "削除する" }
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await idbMaterialDelete(editingMaterialId);
+      await loadMaterialsCache();
+      showToast("教材を削除しました。", "success");
+      openMaterials();
+    } catch (error) {
+      console.error(error);
+      showToast(`削除に失敗しました。${error.message}`, "error");
+    }
+  }
+
+  function openLightbox(src) {
+    const box = document.getElementById("lightbox");
+    document.getElementById("lightbox-img").src = src;
+    box.hidden = false;
+  }
+
+  function switchTab(tab) {
+    if (tab === "materials") {
+      openMaterials();
+      return;
+    }
+
+    renderHome();
+
+    if (tab !== "home") showScreen(tab);
+  }
+
   function buildWeakDrillIds(limit = 20) {
     const summary = Stats.summarize(questions, state);
 
@@ -893,7 +1585,9 @@ const App = (() => {
           streak: loadStreak(),
           srs: loadSrs(),
           notes: loadNotes(),
-          dailyLog: loadDailyLog()
+          dailyLog: loadDailyLog(),
+          materials: await idbMaterialsAll(),
+          attempts: loadAttempts()
         }
       };
 
@@ -953,6 +1647,12 @@ const App = (() => {
       if (extras.srs) saveSrs(extras.srs);
       if (extras.notes) saveNotes(extras.notes);
       if (extras.dailyLog) saveDailyLog(extras.dailyLog);
+      if (extras.attempts) {
+        localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(extras.attempts));
+      }
+      if (Array.isArray(extras.materials) && extras.materials.length) {
+        await idbMaterialsPutMany(extras.materials);
+      }
 
       showToast(
         "学習データを復元しました。まもなく再読み込みします。",
@@ -1084,6 +1784,24 @@ const App = (() => {
       state.daily.date ===
         todayKey()
     ) {
+      const configuredCount =
+        Number(APP_CONFIG.dailyCount) || 20;
+
+      const hasStarted =
+        Array.isArray(state.daily.answers) &&
+        state.daily.answers.length > 0;
+
+      const questionCount =
+        Array.isArray(state.daily.questionIds)
+          ? state.daily.questionIds.length
+          : 0;
+
+      /* dailyCount変更時、未着手ならセッションを作り直す */
+      if (!hasStarted && questionCount !== configuredCount) {
+        state.daily = null;
+        return null;
+      }
+
       return state.daily;
     }
 
@@ -1363,18 +2081,10 @@ const App = (() => {
        */
       else {
         const ids =
-          Selector.selectQuestionIds(
-            questions,
-            state.history,
-            {
-              count:
-                APP_CONFIG.dailyCount,
-
-              strategy:
-                "optimized-daily",
-
-              filters: {}
-            }
+          selectPrioritized(
+            APP_CONFIG.dailyCount,
+            [],
+            "optimized-daily"
           );
 
         if (!ids.length) {
@@ -1488,21 +2198,10 @@ const App = (() => {
     }
 
     const ids =
-      Selector.selectQuestionIds(
-        questions,
-        state.history,
-        {
-          count:
-            APP_CONFIG.extraCount,
-
-          strategy:
-            "unanswered-first",
-
-          filters: {},
-
-          excludeIds:
-            daily.questionIds || []
-        }
+      selectPrioritized(
+        APP_CONFIG.extraCount,
+        daily.questionIds || [],
+        "unanswered-first"
       );
 
     if (!ids.length) {
@@ -1655,7 +2354,8 @@ const App = (() => {
                     : "未学習"
                 }
               </span>
-            </button>
+            <span class="subject-card-bar" data-i="${APP_CONFIG.subjects.indexOf(subject)}"><i style="width:${accuracy}%"></i></span>
+          </button>
           `;
         })
         .join("");
@@ -2253,6 +2953,8 @@ const App = (() => {
         state.history
       ).length;
 
+    renderTodayHero();
+
     showScreen("home");
   }
 
@@ -2415,6 +3117,7 @@ const App = (() => {
 
     updateStreak();
     incrementDailyLog();
+    recordAttempt(submitted.question.id, submitted.result.isCorrect);
 
     const srsMapBefore = loadSrs();
     const previousEntry = srsMapBefore[submitted.question.id];
@@ -2792,6 +3495,7 @@ const App = (() => {
         : "次の問題へ";
 
     renderFavoriteButton();
+    renderRelatedMaterials(lastResult.question);
     showScreen("explain");
   }
 
@@ -2836,6 +3540,7 @@ const App = (() => {
       `正答率 ${summary.accuracy}%`;
 
     showScreen("result");
+    launchConfetti();
   }
 
   /* =========================================================
@@ -4926,6 +5631,105 @@ const App = (() => {
       const file = event.target.files?.[0];
       await importBackupFromFile(file);
     });
+
+    /*
+     * ボトムタブ
+     */
+    document
+      .getElementById("tabbar")
+      .addEventListener("click", event => {
+        const tab = event.target.closest(".tab");
+        if (tab) switchTab(tab.dataset.tab);
+      });
+
+    /*
+     * 教材ライブラリ
+     */
+    document
+      .getElementById("btn-materials-add")
+      .addEventListener("click", () => openMaterialEditor(null));
+
+    document
+      .getElementById("materials-list")
+      .addEventListener("click", event => {
+        const item = event.target.closest("[data-id]");
+        if (item) openMaterialView(item.dataset.id, "materials");
+      });
+
+    document
+      .getElementById("related-materials")
+      .addEventListener("click", event => {
+        const chip = event.target.closest("[data-id]");
+        if (chip) openMaterialView(chip.dataset.id, "explain");
+      });
+
+    document
+      .getElementById("btn-material-view-back")
+      .addEventListener("click", closeMaterialView);
+
+    document
+      .getElementById("btn-material-edit")
+      .addEventListener("click", () => openMaterialEditor(viewingMaterialId));
+
+    document
+      .getElementById("btn-material-quiz")
+      .addEventListener("click", startMaterialQuiz);
+
+    document
+      .getElementById("btn-material-edit-back")
+      .addEventListener("click", () => {
+        if (editingMaterialId) {
+          openMaterialView(editingMaterialId, materialReturnScreen);
+        } else {
+          openMaterials();
+        }
+      });
+
+    const materialImageInput = document.getElementById("material-image-input");
+
+    document
+      .getElementById("btn-material-add-image")
+      .addEventListener("click", () => {
+        materialImageInput.value = "";
+        materialImageInput.click();
+      });
+
+    materialImageInput.addEventListener("change", async event => {
+      await addEditorImages(event.target.files);
+    });
+
+    document
+      .getElementById("material-image-previews")
+      .addEventListener("click", event => {
+        const button = event.target.closest("[data-remove]");
+        if (!button) return;
+
+        editingMaterialImages.splice(Number(button.dataset.remove), 1);
+        renderEditorImages();
+      });
+
+    document
+      .getElementById("btn-material-save")
+      .addEventListener("click", saveMaterialFromForm);
+
+    document
+      .getElementById("btn-material-delete")
+      .addEventListener("click", deleteEditingMaterial);
+
+    document
+      .getElementById("material-view-images")
+      .addEventListener("click", event => {
+        const image = event.target.closest("img");
+        if (image) openLightbox(image.src);
+      });
+
+    document
+      .getElementById("lightbox")
+      .addEventListener("click", () => {
+        document.getElementById("lightbox").hidden = true;
+      });
+
+    loadMaterialsCache();
   }
 
   /* =========================================================
